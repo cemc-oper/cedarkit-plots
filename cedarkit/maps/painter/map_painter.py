@@ -91,7 +91,7 @@ class MapPainter:
         self.add_features_to_layer(layer=layer, features=fs)
 
     def lakes(self, layer: "Layer"):
-        fs = self.map_loader.lakes(**self.coastline_config.loader)
+        fs = self.map_loader.lakes(**self.lakes_config.loader)
         self.add_features_to_layer(layer=layer, features=fs)
 
     def china_coastline(self, layer: "Layer"):
