@@ -35,7 +35,7 @@ Homepage = "https://github.com/cemc-oper/cedarkit-maps"
 Repository = "https://github.com/cemc-oper/cedarkit-maps.git"
 
 [project.optional-dependencies]
-test = ["pytest"]
+test = ["pytest", "scipy"]
 cov = ["pytest-cov"]
 
 [tool.setuptools.packages.find]
