@@ -5,25 +5,46 @@ from cartopy import crs as ccrs
 import matplotlib.path as mpath
 
 from cedarkit.maps.chart import Layer
-from cedarkit.maps.map import get_map_loader_class, MapType, MapLoader
-from cedarkit.maps.util import (
-    AxesRect,
-    AreaRange,
-)
-from cedarkit.maps.painter.map_painter import (
-    MapPainter, MapFeatureConfig, MapInfo
-)
+from cedarkit.maps.util import AreaRange
+from cedarkit.maps.painter.map_painter import MapInfo
 from cedarkit.maps.painter.axes_component_painter import (
     AxesComponentPainter, MapBoxOption, ColorBarOption,
 )
+from cedarkit.maps.painter.presets import (
+    create_china_map_painter,
+    create_south_china_sea_painter,
+)
 
-from .map_template import MapTemplate
+from .east_asia import SOUTH_CHINA_SEA_AREA
+from .map_template import MapTemplate, SubMapConfig
 
 if TYPE_CHECKING:
     from cedarkit.maps.chart import Chart, Panel
 
 
+#: 欧亚默认区域（20°E–170°E, 0°–70°N）
+EUROPE_ASIA_AREA = AreaRange(
+    start_longitude=20,
+    end_longitude=170,
+    start_latitude=0,
+    end_latitude=70,
+)
+
+
 class EuropeAsiaMapTemplate(MapTemplate):
+    """
+    欧亚底图布局，Lambert 投影，可选南海子图。
+
+    使用 LambertConformal 投影 (中心经度 95°E，标准纬线 30°N/60°N)，
+    默认区域为 20°E–170°E, 0°–70°N，带矩形投影边界裁剪。
+
+    Parameters
+    ----------
+    area : AreaRange or None
+        主图区域范围。默认为欧亚区域 (20–170°E, 0–70°N)。
+    with_sub_area : bool
+        是否显示南海子图，默认为 False。
+    """
     def __init__(
             self,
             area: Optional[AreaRange] = None,
@@ -32,14 +53,8 @@ class EuropeAsiaMapTemplate(MapTemplate):
         self.central_longitude = 95
         self.standard_parallels = (30, 60)
 
-        self.default_area = AreaRange(
-            start_longitude=20,
-            end_longitude=170,
-            start_latitude=0,
-            end_latitude=70,
-        )
         if area is None:
-            area = self.default_area
+            area = EUROPE_ASIA_AREA
 
         projection = ccrs.PlateCarree()
         map_projection = ccrs.LambertConformal(
@@ -54,24 +69,21 @@ class EuropeAsiaMapTemplate(MapTemplate):
 
         self.with_sub_area = with_sub_area
 
+        # 布局参数
         self.width = 0.75
         self.height = 0.6
+        self.main_xticks_interval = 10
+        self.main_yticks_interval = 5
 
-        self.sub_area = AreaRange(
-            start_longitude=105,
-            end_longitude=123,
-            start_latitude=2,
-            end_latitude=23,
+        # 南海子图配置
+        self.sub_map_config = SubMapConfig(
+            area=SOUTH_CHINA_SEA_AREA,
+            width=0.1,
+            height=0.14,
         )
-        self.sub_width = 0.1
-        self.sub_height = 0.14
-        self.sub_aspect = 0.1 / 0.14
+        self.sub_map_painter = None
 
-        self.main_map_loader: Optional[MapLoader] = None
-        self.main_map_painter: Optional[MapPainter] = None
-        self.sub_map_loader: Optional[MapLoader] = None
-        self.sub_map_painter: Optional[MapPainter] = None
-        
+        # 坐标轴组件
         self.axes_component_painter = AxesComponentPainter(
             map_box_option=MapBoxOption(
                 bottom_left_point=(-0.04, -0.04),
@@ -81,85 +93,24 @@ class EuropeAsiaMapTemplate(MapTemplate):
                 orientation="vertical",
                 bottom_left_point=(1.07, -0.02),
                 top_right_point=(1.09, 1.02),
-            )
+            ),
         )
 
-        self.main_xticks_interval = 10
-        self.main_yticks_interval = 5
-
-        self.sub_xlocator = [110, 120]
-        self.sub_ylocator = [10, 20]
-
-        self.map_loader_class = get_map_loader_class()
-
-    def render_panel(self, panel: "Panel"):
-        chart = panel.add_chart(domain=self)
-        self.load_map()
-        self.render_chart(chart=chart)
-
-    def render_chart(self, chart: "Chart"):
-        self.render_main_layer(chart=chart)
-        if self.with_sub_area:
-            self.render_sub_layer(chart=chart)
-
-        self.axes_component_painter.draw_map_box(layer=chart.layers[0])
-
     def load_map(self):
-        self.main_map_loader = self.map_loader_class(map_type=MapType.Portrait)
-        self.main_map_painter = MapPainter(
-            map_loader=self.main_map_loader,
-            coastline_config=MapFeatureConfig(
-                loader=dict(
-                    scale="50m",
-                    style=dict(
-                        linewidth=0.5,
-                        # zorder=50
-                    )
-                ),
-                render=True,
-            ),
-            lakes_config=MapFeatureConfig(
-                loader=dict(
-                    scale="50m",
-                    style=dict(
-                        linewidth=0.25,
-                        facecolor='none',
-                        edgecolor="black",
-                        alpha=0.5
-                    )
-                ),
-                render=True,
-            ),
-            china_coastline_config=MapFeatureConfig(render=True),
-            china_borders_config=MapFeatureConfig(render=True),
-            china_provinces_config=MapFeatureConfig(render=True),
-            china_rivers_config=MapFeatureConfig(render=True),
-            china_nine_lines_config=MapFeatureConfig(render=True),
+        """
+        创建主图和南海子图的 MapPainter。
+
+        主图使用中国区域预设（含海岸线、湖泊、省界等），
+        南海子图使用南海预设（含海岸线、省界等，无湖泊）。
+        """
+        self.main_map_painter = create_china_map_painter(
             map_info=MapInfo(
                 x=1.035,
                 y=-0.035,
                 text="Scale 1:20000000 No:GS (2019) 1786",
             ),
         )
-
-        self.sub_map_loader = self.map_loader_class(map_type=MapType.SouthChinaSea)
-        self.sub_map_painter = MapPainter(
-            map_loader=self.sub_map_loader,
-            coastline_config=MapFeatureConfig(
-                loader=dict(
-                    scale="50m",
-                    style=dict(
-                        linewidth=0.25,
-                        # zorder=50
-                    )
-                ),
-                render=True,
-            ),
-            china_coastline_config=MapFeatureConfig(render=True),
-            china_borders_config=MapFeatureConfig(render=True),
-            china_provinces_config=MapFeatureConfig(render=True),
-            china_rivers_config=MapFeatureConfig(render=True),
-            china_nine_lines_config=MapFeatureConfig(render=True),
+        self.sub_map_painter = create_south_china_sea_painter(
             map_info=MapInfo(
                 x=0.99,
                 y=0.01,
@@ -167,136 +118,115 @@ class EuropeAsiaMapTemplate(MapTemplate):
             ),
         )
 
-    def render_main_layer(self, chart: "Chart") -> Layer:
+    def render_chart(self, chart: "Chart"):
         """
-        绑定主地图
+        渲染主图层和南海子图层。
+
+        先调用基类渲染主图层和地图边框，再根据 ``with_sub_area`` 追加南海子图。
 
         Parameters
         ----------
-        chart
-
-        Returns
-        -------
-        Layer
+        chart : Chart
+            Chart 对象。
         """
-        width = self.width
-        height = self.height
-        projection = self.projection
-        map_projection = self.map_projection
-        map_painter = self.main_map_painter
+        super().render_chart(chart=chart)
+        if self.with_sub_area:
+            self.render_sub_layer(
+                chart=chart,
+                config=self.sub_map_config,
+                map_painter=self.sub_map_painter,
+            )
 
-        rect = AxesRect(
-            left=(1 - width)/2,
-            bottom=(1 - height)/2,
-            width=width,
-            height=height,
-        )
-
-        layer = chart.create_layer(
-            rect=rect,
-            projection=projection,
-            map_projection=map_projection
-        )
-
-        #   坐标轴
-
-        #   网格线
-        # main_ylocator = [20, 30, 40, 50]
-        xlocator = np.arange(20, 170, 10)
-        ylocator = np.arange(0, 70, 10)
-        layer.gridlines(
-            xlocator=xlocator,
-            ylocator=ylocator,
-        )
-
-        #   设置区域范围和长宽比
-        layer.set_area(area=self.area)
-
-        # 设置图形边界形状
-        self.set_boundary(layer=layer)
-
-        # 地图信息标注
-        #   x, y, text
-        self.add_map_info(layer=layer, map_painter=map_painter)
-
-        #   地图
-        self.render_map(layer=layer, map_painter=map_painter)
-
-        return layer
-
-    def render_sub_layer(self, chart: "Chart") -> Layer:
+    def setup_bindaxis(self, layer: Layer):
         """
-        绑定南海子图
+        设置坐标轴。
+
+        Lambert 投影不使用常规的经纬度坐标轴，此方法为空实现。
 
         Parameters
         ----------
-        chart
+        layer : Layer
+            图层对象。
+        """
+        pass
+
+    def get_gridline_locators(self):
+        """
+        获取网格线位置。
+
+        基于区域范围和刻度间隔生成，不包含边界值。
 
         Returns
         -------
-        Layer
+        tuple of ndarray
+            ``(xlocator, ylocator)``。
         """
-        main_width = self.width
-        main_height = self.height
-        sub_width = self.sub_width
-        sub_height = self.sub_height
-        rect = AxesRect(
-            left=(1 - main_width) / 2,
-            bottom=(1 - main_height) / 2,
-            width=sub_width,
-            height=sub_height,
+        area = self.area
+        xlocator = np.arange(
+            area.start_longitude,
+            area.end_longitude,
+            self.main_xticks_interval,
         )
-
-        area = self.sub_area
-        projection = self.projection
-        aspect = self.sub_aspect
-        xlocator = self.sub_xlocator
-        ylocator = self.sub_ylocator
-        map_painter = self.sub_map_painter
-
-        # 创建 Layer
-        layer = chart.create_layer(
-            rect=rect,
-            projection=projection,
+        ylocator = np.arange(
+            area.start_latitude,
+            area.end_latitude,
+            self.main_yticks_interval,
         )
+        return xlocator, ylocator
 
-        # 区域：南海子图
-        layer.set_area(
-            area=area,
-            aspect=aspect
-        )
+    def setup_boundary(self, layer: Layer):
+        """
+        设置 Lambert 投影的矩形边界裁剪。
 
-        # 网格线
-        layer.gridlines(
-            xlocator=xlocator,
-            ylocator=ylocator,
-            linewidth=0.2,
-        )
+        沿区域范围的四条边生成顶点路径，将其从 PlateCarree 坐标系
+        转换到 axes 坐标系后设置为地图边界。
 
-        # 地图信息标注
-        self.add_map_info(layer=layer, map_painter=map_painter)
-
-        # 地图
-        self.render_map(layer=layer, map_painter=map_painter)
-
-        return layer
-
-    def set_boundary(self, layer: Layer):
+        Parameters
+        ----------
+        layer : Layer
+            图层对象。
+        """
         ax = layer.ax
-        lon_range = (20, 170)
-        lat_range = (0, 70)
+        area = self.area
+        lon_range = (area.start_longitude, area.end_longitude)
+        lat_range = (area.start_latitude, area.end_latitude)
 
         res = 1
         vertices = [
-                       (lon, lat_range[0]) for lon in np.arange(lon_range[0], lon_range[1] + 1, res)
-                   ] + [
-                       (lon_range[1], lat) for lat in np.arange(lat_range[0], lat_range[1] + 1, res)
-                   ] + [
-                       (lon, lat_range[1]) for lon in np.arange(lon_range[1], lon_range[0] - 1, -res)
-                   ] + [
-                       (lon_range[0], lat) for lat in np.arange(lat_range[1], lat_range[0] - 1, -res)
-                   ]
+            (lon, lat_range[0]) for lon in np.arange(lon_range[0], lon_range[1] + 1, res)
+        ] + [
+            (lon_range[1], lat) for lat in np.arange(lat_range[0], lat_range[1] + 1, res)
+        ] + [
+            (lon, lat_range[1]) for lon in np.arange(lon_range[1], lon_range[0] - 1, -res)
+        ] + [
+            (lon_range[0], lat) for lat in np.arange(lat_range[1], lat_range[0] - 1, -res)
+        ]
 
         path = mpath.Path(vertices)
         proj_to_data = ccrs.PlateCarree()._as_mpl_transform(ax) - ax.transData
         ax.set_boundary(proj_to_data.transform_path(path))
+
+    def render_main_layer(self, chart: "Chart") -> Layer:
+        """
+        渲染 Lambert 投影主图层。
+
+        渲染顺序与基类不同::
+
+            创建图层 → 网格线 → 设置区域 → 矩形边界裁剪 → 绘制地图
+
+        Parameters
+        ----------
+        chart : Chart
+            Chart 对象。
+
+        Returns
+        -------
+        Layer
+            创建的主图层。
+        """
+        layer = self._create_main_layer(chart)
+        self._apply_gridlines(layer)
+        layer.set_area(area=self.area)
+        self.setup_boundary(layer)
+        self._apply_map(layer)
+        return layer

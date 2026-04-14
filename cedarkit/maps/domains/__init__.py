@@ -1,11 +1,12 @@
 import inspect
 from typing import Union, Type
 
-from .map_template import MapTemplate
+from .map_template import MapTemplate, SubMapConfig
 from .east_asia import EastAsiaMapTemplate, CnAreaMapTemplate
 from .north_polar import NorthPolarMapTemplate
 from .europe_asia import EuropeAsiaMapTemplate
 from .global_template import GlobalMapTemplate, GlobalAreaMapTemplate
+from .ens_cn import EnsCNMapTemplate
 from .time_profile_template import TimeStepAndLevelXYTemplate
 
 

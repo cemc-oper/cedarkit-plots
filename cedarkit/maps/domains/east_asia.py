@@ -1,72 +1,85 @@
 from typing import Optional, TYPE_CHECKING
 
-import numpy as np
 from cartopy import crs as ccrs
 
-from cedarkit.maps.chart.layer import Layer
-from cedarkit.maps.map import get_map_loader_class, MapType, MapLoader
-from cedarkit.maps.util import (
-    AxesRect,
-    AreaRange,
-)
-from cedarkit.maps.painter.map_painter import (
-    MapPainter, MapFeatureConfig, MapInfo
-)
+from cedarkit.maps.util import AreaRange
+from cedarkit.maps.painter.map_painter import MapInfo
 from cedarkit.maps.painter.axes_component_painter import (
     AxesComponentPainter, MapBoxOption, ColorBarOption,
 )
+from cedarkit.maps.painter.presets import (
+    create_china_map_painter,
+    create_south_china_sea_painter,
+)
 
-from .map_template import MapTemplate
+from .map_template import MapTemplate, SubMapConfig
 
 if TYPE_CHECKING:
     from cedarkit.maps.chart import Chart, Panel
 
 
+#: 东亚默认区域（70°E–140°E, 15°N–55°N）
+EAST_ASIA_AREA = AreaRange(
+    start_longitude=70,
+    end_longitude=140,
+    start_latitude=15,
+    end_latitude=55,
+)
+
+#: 南海子图区域（105°E–123°E, 2°N–23°N）
+SOUTH_CHINA_SEA_AREA = AreaRange(
+    start_longitude=105,
+    end_longitude=123,
+    start_latitude=2,
+    end_latitude=23,
+)
+
+
 class EastAsiaMapTemplate(MapTemplate):
     """
-    东亚/中国底图布局，带南海子图
+    东亚/中国底图布局，带南海子图。
+
+    使用 PlateCarree 投影，默认区域为 70°E–140°E, 15°N–55°N，
+    可选在左下角叠加南海子图（105°E–123°E, 2°N–23°N）。
+
+    Parameters
+    ----------
+    area : AreaRange or None
+        主图区域范围。默认为东亚区域（70–140°E, 15–55°N）。
+    with_sub_area : bool
+        是否显示南海子图，默认为 True。
     """
     def __init__(
             self,
             area: Optional[AreaRange] = None,
             with_sub_area: bool = True,
     ):
-        self.default_area = AreaRange(
-            start_longitude=70,
-            end_longitude=140,
-            start_latitude=15,
-            end_latitude=55,
-        )
         if area is None:
-            area = self.default_area
+            area = EAST_ASIA_AREA
 
-        projection = ccrs.PlateCarree()
         super().__init__(
-            projection=projection,
-            area=area
+            projection=ccrs.PlateCarree(),
+            area=area,
         )
 
         self.with_sub_area = with_sub_area
 
+        # 主图层布局参数
         self.width = 0.75
         self.height = 0.6
         self.main_aspect = 1.25
+        self.main_xticks_interval = 10
+        self.main_yticks_interval = 5
 
-        self.sub_area = AreaRange(
-            start_longitude=105,
-            end_longitude=123,
-            start_latitude=2,
-            end_latitude=23,
+        # 南海子图层配置
+        self.sub_map_config = SubMapConfig(
+            area=SOUTH_CHINA_SEA_AREA,
+            width=0.1,
+            height=0.14,
         )
-        self.sub_width = 0.1
-        self.sub_height = 0.14
-        self.sub_aspect = 0.1 / 0.14
+        self.sub_map_painter = None
 
-        self.main_map_loader: Optional[MapLoader] = None
-        self.main_map_painter: Optional[MapPainter] = None
-        self.sub_map_loader: Optional[MapLoader] = None
-        self.sub_map_painter: Optional[MapPainter] = None
-
+        # 坐标轴组件
         self.axes_component_painter = AxesComponentPainter(
             map_box_option=MapBoxOption(
                 bottom_left_point=(-0.06, -0.05),
@@ -76,98 +89,46 @@ class EastAsiaMapTemplate(MapTemplate):
                 orientation="vertical",
                 bottom_left_point=(1.05, -0.02),
                 top_right_point=(1.07, 1.02),
-            )
+            ),
         )
 
-        self.main_xticks_interval = 10
-        self.main_yticks_interval = 5
-
-        self.sub_xlocator = [110, 120]
-        self.sub_ylocator = [10, 20]
-
-        self.map_loader_class = get_map_loader_class()
-
     def total_area(self) -> AreaRange:
-        main_area = self.area
-        sub_area = self.sub_area
+        """
+        获取总区域范围，包含主图和南海子图的合并区域。
 
+        Returns
+        -------
+        AreaRange
+            如果不包含南海子图，返回主图区域；
+            否则返回主图与南海子图的最小外接矩形区域。
+        """
+        main_area = self.area
         if not self.with_sub_area:
             return main_area
 
-        total = AreaRange(
+        sub_area = self.sub_map_config.area
+        return AreaRange(
             start_longitude=min(main_area.start_longitude, sub_area.start_longitude),
             end_longitude=max(main_area.end_longitude, sub_area.end_longitude),
             start_latitude=min(main_area.start_latitude, sub_area.start_latitude),
             end_latitude=max(main_area.end_latitude, sub_area.end_latitude),
         )
 
-        return total
-
-    def render_panel(self, panel: "Panel"):
-        chart = panel.add_chart(domain=self)
-        self.load_map()
-        self.render_chart(chart=chart)
-
     def load_map(self):
         """
-        create map loader and map painter.
-        """
-        self.main_map_loader = self.map_loader_class(map_type=MapType.Portrait)
-        self.sub_map_loader = self.map_loader_class(map_type=MapType.SouthChinaSea)
+        创建主图和南海子图的 MapPainter。
 
-        self.main_map_painter = MapPainter(
-            map_loader=self.main_map_loader,
-            coastline_config=MapFeatureConfig(
-                loader=dict(
-                    scale="50m",
-                    style=dict(
-                        linewidth=0.5,
-                        # zorder=50
-                    )
-                ),
-                render=True,
-            ),
-            lakes_config=MapFeatureConfig(
-                loader=dict(
-                    scale="50m",
-                    style=dict(
-                        linewidth=0.25,
-                        facecolor='none',
-                        edgecolor="black",
-                        alpha=0.5
-                    )
-                ),
-                render=True,
-            ),
-            china_coastline_config=MapFeatureConfig(render=True),
-            china_borders_config=MapFeatureConfig(render=True),
-            china_provinces_config=MapFeatureConfig(render=True),
-            china_rivers_config=MapFeatureConfig(render=True),
-            china_nine_lines_config=MapFeatureConfig(render=True),
+        主图使用中国区域预设（含海岸线、湖泊、省界等），
+        南海子图使用南海预设（含海岸线、省界等，无湖泊）。
+        """
+        self.main_map_painter = create_china_map_painter(
             map_info=MapInfo(
                 x=0.998,
                 y=0.0022,
                 text="Scale 1:20000000 No:GS (2019) 1786",
             ),
         )
-
-        self.sub_map_painter = MapPainter(
-            map_loader=self.sub_map_loader,
-            coastline_config=MapFeatureConfig(
-                loader=dict(
-                    scale="50m",
-                    style=dict(
-                        linewidth=0.25,
-                        # zorder=50
-                    )
-                ),
-                render=True,
-            ),
-            china_coastline_config=MapFeatureConfig(render=True),
-            china_borders_config=MapFeatureConfig(render=True),
-            china_provinces_config=MapFeatureConfig(render=True),
-            china_rivers_config=MapFeatureConfig(render=True),
-            china_nine_lines_config=MapFeatureConfig(render=True),
+        self.sub_map_painter = create_south_china_sea_painter(
             map_info=MapInfo(
                 x=0.99,
                 y=0.01,
@@ -176,149 +137,38 @@ class EastAsiaMapTemplate(MapTemplate):
         )
 
     def render_chart(self, chart: "Chart"):
-        self.render_main_layer(chart=chart)
+        """
+        渲染主图层和南海子图层。
+
+        先调用基类渲染主图层和地图边框，再根据 ``with_sub_area`` 追加南海子图。
+
+        Parameters
+        ----------
+        chart : Chart
+            Chart 对象。
+        """
+        super().render_chart(chart=chart)
         if self.with_sub_area:
-            self.render_sub_layer(chart=chart)
-
-        self.axes_component_painter.draw_map_box(
-            layer=chart.layers[0]
-        )
-
-    def render_main_layer(self, chart: "Chart") -> Layer:
-        """
-        绑定主地图
-
-        Parameters
-        ----------
-        chart
-
-        Returns
-        -------
-        Layer
-        """
-        width = self.width
-        height = self.height
-        rect = AxesRect(
-            left=(1 - width)/2,
-            bottom=(1 - height)/2,
-            width=width,
-            height=height,
-        )
-
-        area = self.area
-        projection = self.projection
-        aspect = self.main_aspect  # 0.75/0.6
-        xticks_interval = self.main_xticks_interval
-        yticks_interval = self.main_yticks_interval
-        map_painter = self.main_map_painter
-
-        # 创建 Layer
-        #       width, height
-        layer = chart.create_layer(
-            rect=rect,
-            projection=projection,
-        )
-
-        # 设置区域范围和长宽比
-        #       area
-        layer.set_area(area=area, aspect=aspect)
-
-        # 坐标轴
-        #       area, main_xticks_interval, main_yticks_interval
-        # NOTE: 需要将边界点包含在内。
-        # 当前方式存在问题，会将整形标签变为浮点类型
-        xticks = np.arange(
-            area.start_longitude,
-            area.end_longitude + xticks_interval/10,
-            xticks_interval
-        )
-        yticks = np.arange(
-            area.start_latitude,
-            area.end_latitude + yticks_interval/10,
-            yticks_interval
-        )
-        layer.set_axis(xticks=xticks, yticks=yticks)
-
-        # 网格线
-        #       同坐标轴
-        # 边界处是边框，不需要网格线，但需要坐标轴标注。边框会覆盖网格线，所以直接使用标签列表即可
-        # xlocator = xticks[1:-1]
-        # ylocator = yticks[1:-1]
-        xlocator = xticks
-        ylocator = yticks
-        layer.gridlines(
-            xlocator=xlocator,
-            ylocator=ylocator,
-        )
-
-        # 地图信息标注
-        #   x, y, text
-        self.add_map_info(layer=layer, map_painter=map_painter)
-
-        #   地图
-        self.render_map(layer=layer, map_painter=map_painter)
-
-        return layer
-
-    def render_sub_layer(self, chart: "Chart") -> Layer:
-        """
-        绑定南海子图
-
-        Parameters
-        ----------
-        chart
-
-        Returns
-        -------
-        Layer
-        """
-        main_width = self.width
-        main_height = self.height
-        sub_width = self.sub_width
-        sub_height = self.sub_height
-        rect = AxesRect(
-            left=(1 - main_width) / 2,
-            bottom=(1 - main_height) / 2,
-            width=sub_width,
-            height=sub_height,
-        )
-
-        area = self.sub_area
-        projection = self.projection
-        aspect = self.sub_aspect
-        xlocator = self.sub_xlocator
-        ylocator = self.sub_ylocator
-        map_painter = self.sub_map_painter
-
-        # 创建 Layer
-        layer = chart.create_layer(
-            rect=rect,
-            projection=projection,
-        )
-        ax = layer.ax
-
-        # 区域：南海子图
-        layer.set_area(area=area, aspect=aspect)
-
-        # 网格线
-        layer.gridlines(
-            xlocator=xlocator,
-            ylocator=ylocator,
-            linewidth=0.2,
-        )
-
-        # 地图信息标注
-        self.add_map_info(layer=layer, map_painter=map_painter)
-
-        # 地图
-        self.render_map(layer=layer, map_painter=map_painter)
-
-        return layer
+            self.render_sub_layer(
+                chart=chart,
+                config=self.sub_map_config,
+                map_painter=self.sub_map_painter,
+            )
 
 
 class CnAreaMapTemplate(EastAsiaMapTemplate):
     """
-    中国区域底图布局，例如华北、华中、华南等
+    中国区域底图布局，例如华北、华中、华南等。
+
+    继承自 ``EastAsiaMapTemplate``，使用更密的刻度间隔和更宽的主图。
+    默认不显示南海子图。
+
+    Parameters
+    ----------
+    area : AreaRange or None
+        区域范围。默认继承 ``EastAsiaMapTemplate`` 的东亚区域。
+    with_sub_area : bool
+        是否显示南海子图，默认为 False。
     """
     def __init__(
             self,
