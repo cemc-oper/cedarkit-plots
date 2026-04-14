@@ -555,3 +555,74 @@ def global_wind_fields(global_coords):
     )
     
     return u_field, v_field
+
+
+# ==================== 集合预报中国区域 fixtures ====================
+
+@pytest.fixture
+def ens_cn_coords():
+    """集合预报中国区域坐标网格（73°E–135°E, 16°N–56°N）"""
+    lons = np.linspace(73, 135, 125)  # ~0.5度分辨率
+    lats = np.linspace(16, 56, 81)
+    return lons, lats
+
+
+@pytest.fixture
+def ens_cn_temperature_fields(ens_cn_coords):
+    """
+    模拟集合预报 2m 温度场数据（15 个成员）。
+
+    每个成员在基础场上叠加不同的随机扰动，模拟集合离散度。
+
+    Returns
+    -------
+    list of xr.DataArray
+        长度为 15 的温度场列表，对应 CTL + mem01~mem14。
+    """
+    lons, lats = ens_cn_coords
+    lon_grid, lat_grid = np.meshgrid(lons, lats)
+
+    lat_min = lats.min()
+    lon_min = lons.min()
+
+    # 基础温度场：南暖北冷
+    base_temp = 30 - 0.8 * (lat_grid - lat_min)
+    lon_effect = 5 * np.sin(np.radians(lon_grid - lon_min) * 2)
+    base = base_temp + lon_effect
+
+    fields = []
+    rng = np.random.RandomState(42)
+    for i in range(15):
+        # 每个成员加不同扰动
+        perturbation = rng.randn(*base.shape) * (2 + i * 0.3)
+        temperature = base + perturbation
+
+        field = xr.DataArray(
+            temperature,
+            dims=['latitude', 'longitude'],
+            coords={'latitude': lats, 'longitude': lons},
+            attrs={'units': 'degC', 'long_name': f'2m Temperature (member {i:02d})'},
+        )
+        fields.append(field)
+
+    return fields
+
+
+@pytest.fixture
+def ens_cn_temperature_fields_with_max(ens_cn_temperature_fields):
+    """
+    模拟集合预报温度场数据（15 个成员 + MAX）。
+
+    MAX 为所有成员的逐格点最大值。
+
+    Returns
+    -------
+    list of xr.DataArray
+        长度为 16 的温度场列表，对应 CTL + mem01~mem14 + MAX。
+    """
+    fields = list(ens_cn_temperature_fields)
+    stacked = xr.concat(fields, dim='member')
+    max_field = stacked.max(dim='member')
+    max_field.attrs = {'units': 'degC', 'long_name': '2m Temperature (MAX)'}
+    fields.append(max_field)
+    return fields
