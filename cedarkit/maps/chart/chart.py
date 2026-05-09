@@ -1,11 +1,12 @@
 from typing import List, Optional, Any, TYPE_CHECKING
 from cartopy import crs as ccrs
 
-from cedarkit.maps.style import Style, ContourStyle, BarbStyle
-from cedarkit.maps.util import AxesRect
+from cedarkit.maps.style import Style
+from cedarkit.maps.types import AxesRect
 from cedarkit.maps.template import XYTemplate
 
 from .layer import Layer
+from .renderer import get_renderer
 
 if TYPE_CHECKING:
     from .panel import Panel
@@ -108,14 +109,7 @@ class Chart:
         else:
             layers = [self.layers[i] for i in layer]
         for layer in layers:
-            if isinstance(style, ContourStyle):
-                if style.fill:
-                    result = layer.contourf(data=data, style=style)
-                else:
-                    result = layer.contour(data=data, style=style)
-            elif isinstance(style, BarbStyle):
-                result = layer.barb(x=data[0], y=data[1], style=style)
-            else:
-                raise NotImplementedError(f"style is not implemented: {type(style)}")
+            renderer = get_renderer(style)
+            result = renderer.render(layer, data, style)
             results.append(result)
         return results

@@ -14,8 +14,8 @@ from cedarkit.maps.graph import (
     add_contour_label,
     add_barb,
 )
-from cedarkit.maps.util import (
-    AreaRange,
+from cedarkit.maps.types import AreaRange
+from cedarkit.maps.bindutils import (
     set_map_box_area,
     set_map_box_axis,
     draw_map_box_gridlines,

@@ -1,21 +1,30 @@
 from dataclasses import dataclass
-from typing import Tuple, Union, List, Literal
+from typing import Optional, Tuple, Union, List, Literal
 
 from cedarkit.maps.chart import Layer
-from cedarkit.maps.util import (
-    draw_map_box,
-    GraphTitle,
+from cedarkit.maps.types import GraphTitle, GraphColorbar
+from cedarkit.maps.bindutils import draw_map_box
+from cedarkit.maps.painter.component_bindutils import (
     set_map_box_title,
-    GraphColorbar,
     add_map_box_colorbar,
 )
 from cedarkit.maps.style import ContourStyle
 
 
 @dataclass
+class TitleOption:
+    """标题样式配置。"""
+    fontsize: float = 7
+    main_pos: Tuple[float, float] = (0.5, 1.05)
+    main_fontsize: float = 10
+
+
+@dataclass
 class MapBoxOption:
     bottom_left_point: Tuple[float, float]
     top_right_point: Tuple[float, float]
+    linewidth: float = 1.3
+    edgecolor: str = "black"
 
 
 @dataclass
@@ -23,12 +32,19 @@ class ColorBarOption:
     orientation: Literal["vertical", "horizontal"]
     bottom_left_point: Tuple[float, float]
     top_right_point: Tuple[float, float]
+    tick_fontsize: float = 7
+    tick_pad: float = 7
 
 
 @dataclass
 class AxesComponentPainter:
     map_box_option: MapBoxOption
     color_bar_option: ColorBarOption
+    title_option: Optional[TitleOption] = None
+
+    def __post_init__(self):
+        if self.title_option is None:
+            self.title_option = TitleOption()
 
     def draw_map_box(self, layer: Layer):
         ax = layer.ax
@@ -36,6 +52,8 @@ class AxesComponentPainter:
             ax,
             bottom_left_point=self.map_box_option.bottom_left_point,
             top_right_point=self.map_box_option.top_right_point,
+            linewidth=self.map_box_option.linewidth,
+            edgecolor=self.map_box_option.edgecolor,
         )
 
     def add_title(self, layer: Layer, graph_title: GraphTitle):
@@ -43,12 +61,14 @@ class AxesComponentPainter:
         graph_title.bottom = self.map_box_option.bottom_left_point[1] - 0.005
         graph_title.top = self.map_box_option.top_right_point[1]
         graph_title.right = self.map_box_option.top_right_point[0]
-        graph_title.main_pos = (0.5, 1.05)
+        graph_title.main_pos = self.title_option.main_pos
 
         ax = layer.ax
         set_map_box_title(
             ax,
             graph_title=graph_title,
+            fontsize=self.title_option.fontsize,
+            main_fontsize=self.title_option.main_fontsize,
         )
 
     def add_colorbar(self, layer: Layer, style: Union[ContourStyle, List[ContourStyle]]):
@@ -121,6 +141,8 @@ class AxesComponentPainter:
             color_bar = add_map_box_colorbar(
                 graph_colorbar=graph_colorbar,
                 ax=ax,
+                tick_fontsize=self.color_bar_option.tick_fontsize,
+                tick_pad=self.color_bar_option.tick_pad,
             )
 
             color_bars.append(color_bar)
@@ -191,6 +213,8 @@ class AxesComponentPainter:
             color_bar = add_map_box_colorbar(
                 graph_colorbar=graph_colorbar,
                 ax=ax,
+                tick_fontsize=self.color_bar_option.tick_fontsize,
+                tick_pad=self.color_bar_option.tick_pad,
             )
 
             color_bars.append(color_bar)

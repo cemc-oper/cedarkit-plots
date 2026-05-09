@@ -5,8 +5,8 @@ from cartopy import crs as ccrs
 import matplotlib.path as mpath
 
 from cedarkit.maps.chart import Layer
-from cedarkit.maps.util import AreaRange
-from cedarkit.maps.painter.map_painter import MapInfo
+from cedarkit.maps.types import AreaRange
+from cedarkit.maps.painter.map_painter import MapPainter, MapInfo
 from cedarkit.maps.painter.axes_component_painter import (
     AxesComponentPainter, MapBoxOption, ColorBarOption,
 )
@@ -16,6 +16,7 @@ from cedarkit.maps.painter.presets import (
 )
 
 from .east_asia import SOUTH_CHINA_SEA_AREA
+from .layout import LayoutConfig
 from .map_template import MapTemplate, SubMapConfig
 
 if TYPE_CHECKING:
@@ -44,17 +45,32 @@ class EuropeAsiaMapTemplate(MapTemplate):
         主图区域范围。默认为欧亚区域 (20–170°E, 0–70°N)。
     with_sub_area : bool
         是否显示南海子图，默认为 False。
+    layout_config : LayoutConfig or None
+        布局配置。默认为 ``LayoutConfig.europe_asia()``。
+    axes_component_painter : AxesComponentPainter or None
+        坐标轴组件配置。默认为欧亚区域标准布局。
+    main_map_painter : MapPainter or None
+        主图地图绑定器。默认在 ``load_map()`` 中使用中国区域预设创建。
+    sub_map_painter : MapPainter or None
+        南海子图地图绑定器。默认在 ``load_map()`` 中使用南海预设创建。
     """
     def __init__(
             self,
             area: Optional[AreaRange] = None,
             with_sub_area: bool = False,
+            layout_config: Optional[LayoutConfig] = None,
+            axes_component_painter: Optional[AxesComponentPainter] = None,
+            main_map_painter: Optional[MapPainter] = None,
+            sub_map_painter: Optional[MapPainter] = None,
     ):
         self.central_longitude = 95
         self.standard_parallels = (30, 60)
 
         if area is None:
             area = EUROPE_ASIA_AREA
+
+        if layout_config is None:
+            layout_config = LayoutConfig.europe_asia()
 
         projection = ccrs.PlateCarree()
         map_projection = ccrs.LambertConformal(
@@ -65,15 +81,10 @@ class EuropeAsiaMapTemplate(MapTemplate):
             area=area,
             projection=projection,
             map_projection=map_projection,
+            layout_config=layout_config,
         )
 
         self.with_sub_area = with_sub_area
-
-        # 布局参数
-        self.width = 0.75
-        self.height = 0.6
-        self.main_xticks_interval = 10
-        self.main_yticks_interval = 5
 
         # 南海子图配置
         self.sub_map_config = SubMapConfig(
@@ -81,42 +92,55 @@ class EuropeAsiaMapTemplate(MapTemplate):
             width=0.1,
             height=0.14,
         )
-        self.sub_map_painter = None
+
+        # 注入的 MapPainter（如果提供）
+        if main_map_painter is not None:
+            self.main_map_painter = main_map_painter
+        if sub_map_painter is not None:
+            self.sub_map_painter = sub_map_painter
+        else:
+            self.sub_map_painter = None
 
         # 坐标轴组件
-        self.axes_component_painter = AxesComponentPainter(
-            map_box_option=MapBoxOption(
-                bottom_left_point=(-0.04, -0.04),
-                top_right_point=(1.04, 1.04),
-            ),
-            color_bar_option=ColorBarOption(
-                orientation="vertical",
-                bottom_left_point=(1.07, -0.02),
-                top_right_point=(1.09, 1.02),
-            ),
-        )
+        if axes_component_painter is not None:
+            self.axes_component_painter = axes_component_painter
+        else:
+            self.axes_component_painter = AxesComponentPainter(
+                map_box_option=MapBoxOption(
+                    bottom_left_point=(-0.04, -0.04),
+                    top_right_point=(1.04, 1.04),
+                ),
+                color_bar_option=ColorBarOption(
+                    orientation="vertical",
+                    bottom_left_point=(1.07, -0.02),
+                    top_right_point=(1.09, 1.02),
+                ),
+            )
 
     def load_map(self):
         """
         创建主图和南海子图的 MapPainter。
 
+        如果构造函数中已注入了 painter，则跳过对应的创建。
         主图使用中国区域预设（含海岸线、湖泊、省界等），
         南海子图使用南海预设（含海岸线、省界等，无湖泊）。
         """
-        self.main_map_painter = create_china_map_painter(
-            map_info=MapInfo(
-                x=1.035,
-                y=-0.035,
-                text="Scale 1:20000000 No:GS (2019) 1786",
-            ),
-        )
-        self.sub_map_painter = create_south_china_sea_painter(
-            map_info=MapInfo(
-                x=0.99,
-                y=0.01,
-                text="Scale 1:40000000",
-            ),
-        )
+        if self.main_map_painter is None:
+            self.main_map_painter = create_china_map_painter(
+                map_info=MapInfo(
+                    x=1.035,
+                    y=-0.035,
+                    text="Scale 1:20000000 No:GS (2019) 1786",
+                ),
+            )
+        if self.sub_map_painter is None:
+            self.sub_map_painter = create_south_china_sea_painter(
+                map_info=MapInfo(
+                    x=0.99,
+                    y=0.01,
+                    text="Scale 1:40000000",
+                ),
+            )
 
     def render_chart(self, chart: "Chart"):
         """

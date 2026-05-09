@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, Dict, Optional
 from dataclasses import dataclass, field
 
 from cedarkit.maps.map import MapLoader
-from cedarkit.maps.util import add_map_info_text
+from cedarkit.maps.painter.component_bindutils import add_map_info_text
 
 if TYPE_CHECKING:
     from cedarkit.maps.chart import Layer
@@ -48,6 +48,7 @@ class MapPainter:
     china_nine_lines_config: MapFeatureConfig = field(default_factory=MapFeatureConfig)
     global_borders_config: MapFeatureConfig = field(default_factory=MapFeatureConfig)
     map_info: Optional[MapInfo] = None
+    extra_features: Dict[str, MapFeatureConfig] = field(default_factory=dict)
 
     def render_layer(self, layer: "Layer"):
         """
@@ -77,6 +78,11 @@ class MapPainter:
             self.china_nine_lines(layer=layer)
         if self.global_borders_config.render:
             self.global_borders(layer=layer)
+
+        # Render extra features
+        for name, config in self.extra_features.items():
+            if config.render:
+                self._render_extra_feature(layer=layer, name=name, config=config)
 
     def coastline(self, layer: "Layer"):
         fs = self.map_loader.coastline(**self.coastline_config.loader)
@@ -117,6 +123,23 @@ class MapPainter:
     def global_borders(self, layer: "Layer"):
         fs = self.map_loader.global_borders()
         self.add_features_to_layer(layer=layer, features=fs)
+
+    def _render_extra_feature(self, layer: "Layer", name: str, config: MapFeatureConfig):
+        """
+        Render a single extra feature by name using the map loader.
+
+        Parameters
+        ----------
+        layer
+            The layer to render the feature on.
+        name
+            The feature name, used to look up the feature via map_loader.get_feature().
+        config
+            The feature configuration containing loader kwargs.
+        """
+        loader_kwargs = config.loader if config.loader is not None else {}
+        features = self.map_loader.get_feature(name, **loader_kwargs)
+        self.add_features_to_layer(layer=layer, features=features)
 
     def add_map_info(self, layer: "Layer"):
         """

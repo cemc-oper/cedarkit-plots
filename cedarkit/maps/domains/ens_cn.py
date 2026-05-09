@@ -6,13 +6,12 @@ from cartopy import crs as ccrs
 
 from cedarkit.maps.style import ContourStyle
 from cedarkit.maps.chart import Layer
-from cedarkit.maps.util import (
-    GraphTitle,
+from cedarkit.maps.types import AreaRange, GraphTitle
+from cedarkit.maps.painter.component_bindutils import (
     fill_graph_title,
     set_map_box_title,
-    clear_axes,
-    AreaRange,
 )
+from cedarkit.maps.util import clear_axes
 from cedarkit.maps.painter.axes_component_painter import (
     AxesComponentPainter, MapBoxOption, ColorBarOption,
 )

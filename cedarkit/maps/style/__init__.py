@@ -26,7 +26,9 @@ PLOT_STYLE = dict(
 
 @dataclass
 class Style:
-    ...
+    def validate(self):
+        """子类重写以实现具体验证逻辑。"""
+        pass
 
 
 @dataclass
@@ -60,6 +62,19 @@ class ContourStyle(Style):
     label_style: Optional[ContourLabelStyle] = None
     colorbar_style: Optional[ColorbarStyle] = None
 
+    def __post_init__(self):
+        self.validate()
+
+    def validate(self):
+        if self.levels is not None:
+            levels = np.asarray(self.levels)
+            if levels.ndim == 1 and len(levels) > 1:
+                if not np.all(np.diff(levels) > 0):
+                    raise ValueError(
+                        f"ContourStyle.levels must be monotonically increasing, "
+                        f"got: {self.levels}"
+                    )
+
 
 @dataclass
 class BarbStyle(Style):
@@ -74,3 +89,14 @@ class BarbStyle(Style):
     def __post_init__(self):
         if self.barb_increments is None:
             self.barb_increments = dict(half=2, full=4, flag=20)
+        self.validate()
+
+    def validate(self):
+        if self.barb_increments is not None:
+            required_keys = {"half", "full", "flag"}
+            missing = required_keys - set(self.barb_increments.keys())
+            if missing:
+                raise ValueError(
+                    f"BarbStyle.barb_increments must contain keys {required_keys}, "
+                    f"missing: {missing}"
+                )

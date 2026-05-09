@@ -5,13 +5,14 @@ from cartopy import crs as ccrs
 import matplotlib.path as mpath
 
 from cedarkit.maps.chart import Layer
-from cedarkit.maps.util import AreaRange
-from cedarkit.maps.painter.map_painter import MapInfo
+from cedarkit.maps.types import AreaRange
+from cedarkit.maps.painter.map_painter import MapPainter, MapInfo
 from cedarkit.maps.painter.axes_component_painter import (
     AxesComponentPainter, MapBoxOption, ColorBarOption,
 )
 from cedarkit.maps.painter.presets import create_china_map_painter
 
+from .layout import LayoutConfig
 from .map_template import MapTemplate
 
 if TYPE_CHECKING:
@@ -37,15 +38,27 @@ class NorthPolarMapTemplate(MapTemplate):
     ----------
     area : AreaRange or None
         地图区域范围。默认为北半球全域 (-180°–180°E, 0°–90°N)。
+    layout_config : LayoutConfig or None
+        布局配置。默认为 ``LayoutConfig.north_polar()``。
+    axes_component_painter : AxesComponentPainter or None
+        坐标轴组件配置。默认为北极投影标准布局。
+    main_map_painter : MapPainter or None
+        主图地图绑定器。默认在 ``load_map()`` 中使用中国区域预设创建。
     """
     def __init__(
             self,
             area: Optional[AreaRange] = None,
+            layout_config: Optional[LayoutConfig] = None,
+            axes_component_painter: Optional[AxesComponentPainter] = None,
+            main_map_painter: Optional[MapPainter] = None,
     ):
         self.central_longitude = 110
 
         if area is None:
             area = NORTH_POLAR_AREA
+
+        if layout_config is None:
+            layout_config = LayoutConfig.north_polar()
 
         projection = ccrs.PlateCarree()
         map_projection = ccrs.NorthPolarStereo(
@@ -55,38 +68,44 @@ class NorthPolarMapTemplate(MapTemplate):
             area=area,
             projection=projection,
             map_projection=map_projection,
+            layout_config=layout_config,
         )
-
-        # 布局参数
-        self.width = 0.75
-        self.height = 0.8
 
         # 坐标轴组件
-        self.axes_component_painter = AxesComponentPainter(
-            map_box_option=MapBoxOption(
-                bottom_left_point=(-0.05, -0.05),
-                top_right_point=(1.07, 1.03),
-            ),
-            color_bar_option=ColorBarOption(
-                orientation="vertical",
-                bottom_left_point=(1.09, -0.02),
-                top_right_point=(1.11, 1.02),
-            ),
-        )
+        if axes_component_painter is not None:
+            self.axes_component_painter = axes_component_painter
+        else:
+            self.axes_component_painter = AxesComponentPainter(
+                map_box_option=MapBoxOption(
+                    bottom_left_point=(-0.05, -0.05),
+                    top_right_point=(1.07, 1.03),
+                ),
+                color_bar_option=ColorBarOption(
+                    orientation="vertical",
+                    bottom_left_point=(1.09, -0.02),
+                    top_right_point=(1.11, 1.02),
+                ),
+            )
+
+        # 注入的 MapPainter（如果提供）
+        if main_map_painter is not None:
+            self.main_map_painter = main_map_painter
 
     def load_map(self):
         """
         创建主图的 MapPainter。
 
+        如果构造函数中已注入了 painter，则跳过创建。
         使用中国区域预设（含海岸线、湖泊、省界等）。
         """
-        self.main_map_painter = create_china_map_painter(
-            map_info=MapInfo(
-                x=1.065,
-                y=-0.045,
-                text="Scale 1:20000000 No:GS (2019) 1786",
-            ),
-        )
+        if self.main_map_painter is None:
+            self.main_map_painter = create_china_map_painter(
+                map_info=MapInfo(
+                    x=1.065,
+                    y=-0.045,
+                    text="Scale 1:20000000 No:GS (2019) 1786",
+                ),
+            )
 
     def setup_bindaxis(self, layer: Layer):
         """

@@ -24,34 +24,65 @@ class MapLoader:
         self.kwargs = kwargs
 
     def coastline(self, scale: Optional[str] = None, style: Optional[Dict] = None) -> List[cfeature.Feature]:
-        ...
+        raise NotImplementedError(f"{type(self).__name__} must implement coastline()")
 
     def land(self, scale: Optional[str] = None, style: Optional[Dict] = None) -> List[cfeature.Feature]:
-        ...
+        raise NotImplementedError(f"{type(self).__name__} must implement land()")
 
     def rivers(self, scale: Optional[str] = None, style: Optional[Dict] = None) -> List[cfeature.Feature]:
-        ...
+        raise NotImplementedError(f"{type(self).__name__} must implement rivers()")
 
     def lakes(self, scale: Optional[str] = None, style: Optional[Dict] = None) -> List[cfeature.Feature]:
-        ...
+        raise NotImplementedError(f"{type(self).__name__} must implement lakes()")
 
     def china_coastline(self) -> List[cfeature.Feature]:
-        ...
+        raise NotImplementedError(f"{type(self).__name__} must implement china_coastline()")
 
     def china_borders(self) -> List[cfeature.Feature]:
-        ...
+        raise NotImplementedError(f"{type(self).__name__} must implement china_borders()")
 
     def china_provinces(self) -> List[cfeature.Feature]:
-        ...
+        raise NotImplementedError(f"{type(self).__name__} must implement china_provinces()")
 
     def china_rivers(self) -> List[cfeature.Feature]:
-        ...
+        raise NotImplementedError(f"{type(self).__name__} must implement china_rivers()")
 
     def china_nine_lines(self) -> List[cfeature.Feature]:
-        ...
+        raise NotImplementedError(f"{type(self).__name__} must implement china_nine_lines()")
 
     def global_borders(self) -> List[cfeature.Feature]:
-        ...
+        raise NotImplementedError(f"{type(self).__name__} must implement global_borders()")
+
+    def get_feature(self, name: str, **kwargs) -> List[cfeature.Feature]:
+        """
+        按名称获取地图要素。
+
+        默认实现尝试调用同名方法。子类可重写以支持自定义要素。
+
+        Parameters
+        ----------
+        name
+            要素名称，对应 MapLoader 的方法名（如 "coastline"、"china_borders"）。
+        **kwargs
+            传递给对应方法的关键字参数。
+
+        Returns
+        -------
+        List[cfeature.Feature]
+            地图要素列表。
+
+        Raises
+        ------
+        NotImplementedError
+            当加载器不支持该要素时抛出，错误消息中包含要素名称和加载器类名。
+        """
+        method = getattr(self, name, None)
+        if method is not None and callable(method):
+            return method(**kwargs)
+        raise NotImplementedError(
+            f"Feature '{name}' is not supported by {type(self).__name__}. "
+            f"Override get_feature() to add custom features."
+        )
 
 
 def set_default_map_loader_package(map_package: str):

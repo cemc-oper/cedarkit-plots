@@ -6,13 +6,14 @@ from cartopy import crs as ccrs
 
 from cedarkit.maps.chart import Layer
 from cedarkit.maps.map import MapType
-from cedarkit.maps.util import AreaRange, GraphTitle
-from cedarkit.maps.painter.map_painter import MapInfo
+from cedarkit.maps.types import AreaRange, GraphTitle
+from cedarkit.maps.painter.map_painter import MapPainter, MapInfo
 from cedarkit.maps.painter.axes_component_painter import (
     AxesComponentPainter, MapBoxOption, ColorBarOption,
 )
 from cedarkit.maps.painter.presets import create_global_map_painter
 
+from .layout import LayoutConfig
 from .map_template import MapTemplate
 
 if TYPE_CHECKING:
@@ -39,13 +40,25 @@ class GlobalMapTemplate(MapTemplate):
     ----------
     area : AreaRange or None
         地图区域范围。默认为全球范围。
+    layout_config : LayoutConfig or None
+        布局配置。默认为 ``LayoutConfig.global_default()``。
+    axes_component_painter : AxesComponentPainter or None
+        坐标轴组件配置。默认为水平色标布局。
+    main_map_painter : MapPainter or None
+        主图地图绑定器。默认在 ``load_map()`` 中使用全球地图预设创建。
     """
     def __init__(
             self,
             area: Optional[AreaRange] = None,
+            layout_config: Optional[LayoutConfig] = None,
+            axes_component_painter: Optional[AxesComponentPainter] = None,
+            main_map_painter: Optional[MapPainter] = None,
     ):
         if area is None:
             area = GLOBAL_AREA
+
+        if layout_config is None:
+            layout_config = LayoutConfig.global_default()
 
         self.central_longitude = 80
 
@@ -57,41 +70,45 @@ class GlobalMapTemplate(MapTemplate):
             projection=projection,
             area=area,
             map_projection=map_projection,
+            layout_config=layout_config,
         )
-
-        # 布局参数
-        self.width = 0.8
-        self.height = 0.6
-        self.main_xticks_interval = 30
-        self.main_yticks_interval = 30
 
         # 坐标轴组件
-        self.axes_component_painter = AxesComponentPainter(
-            map_box_option=MapBoxOption(
-                bottom_left_point=(0, 0),
-                top_right_point=(1, 1),
-            ),
-            color_bar_option=ColorBarOption(
-                orientation="horizontal",
-                bottom_left_point=(0.1, -0.12),
-                top_right_point=(0.9, -0.1),
-            ),
-        )
+        if axes_component_painter is not None:
+            self.axes_component_painter = axes_component_painter
+        else:
+            self.axes_component_painter = AxesComponentPainter(
+                map_box_option=MapBoxOption(
+                    bottom_left_point=(0, 0),
+                    top_right_point=(1, 1),
+                ),
+                color_bar_option=ColorBarOption(
+                    orientation="horizontal",
+                    bottom_left_point=(0.1, -0.12),
+                    top_right_point=(0.9, -0.1),
+                ),
+            )
+
+        # 注入的 MapPainter（如果提供）
+        if main_map_painter is not None:
+            self.main_map_painter = main_map_painter
 
     def load_map(self):
         """
         创建主图的 MapPainter。
 
+        如果构造函数中已注入了 painter，则跳过创建。
         使用全球地图预设（含海岸线、陆地填充）。
         """
-        self.main_map_painter = create_global_map_painter(
-            map_info=MapInfo(
-                x=0.998,
-                y=0.0022,
-                text="Scale 1:20000000 No:GS (2019) 1786",
-            ),
-            with_land=True,
-        )
+        if self.main_map_painter is None:
+            self.main_map_painter = create_global_map_painter(
+                map_info=MapInfo(
+                    x=0.998,
+                    y=0.0022,
+                    text="Scale 1:20000000 No:GS (2019) 1786",
+                ),
+                with_land=True,
+            )
 
     def render_chart(self, chart: "Chart"):
         """
@@ -255,28 +272,44 @@ class GlobalAreaMapTemplate(GlobalMapTemplate):
     ----------
     area : AreaRange or None
         区域范围。默认继承 ``GlobalMapTemplate`` 的全球范围。
+    layout_config : LayoutConfig or None
+        布局配置。默认为 ``LayoutConfig.global_area()``。
+    axes_component_painter : AxesComponentPainter or None
+        坐标轴组件配置。默认继承 ``GlobalMapTemplate`` 的配置。
+    main_map_painter : MapPainter or None
+        主图地图绑定器。默认在 ``load_map()`` 中使用全球地图预设创建。
     """
     def __init__(
             self,
             area: Optional[AreaRange] = None,
+            layout_config: Optional[LayoutConfig] = None,
+            axes_component_painter: Optional[AxesComponentPainter] = None,
+            main_map_painter: Optional[MapPainter] = None,
     ):
-        super().__init__(area=area)
+        if layout_config is None:
+            layout_config = LayoutConfig.global_area()
 
-        self.main_xticks_interval = 10
-        self.main_yticks_interval = 10
+        super().__init__(
+            area=area,
+            layout_config=layout_config,
+            axes_component_painter=axes_component_painter,
+            main_map_painter=main_map_painter,
+        )
 
     def load_map(self):
         """
         创建主图的 MapPainter。
 
+        如果构造函数中已注入了 painter，则跳过创建。
         使用全球地图预设（含海岸线、全球国界线）。
         """
-        self.main_map_painter = create_global_map_painter(
-            map_type=MapType.Global,
-            map_info=MapInfo(
-                x=0.998,
-                y=0.0022,
-                text="Scale 1:20000000 No:GS (2019) 1786",
-            ),
-            with_global_borders=True,
-        )
+        if self.main_map_painter is None:
+            self.main_map_painter = create_global_map_painter(
+                map_type=MapType.Global,
+                map_info=MapInfo(
+                    x=0.998,
+                    y=0.0022,
+                    text="Scale 1:20000000 No:GS (2019) 1786",
+                ),
+                with_global_borders=True,
+            )

@@ -6,9 +6,11 @@ import pandas as pd
 import cartopy.crs as ccrs
 
 from cedarkit.maps.style import ContourStyle
-from cedarkit.maps.util import AreaRange, AxesRect, GraphTitle, fill_graph_title
+from cedarkit.maps.types import AreaRange, AxesRect, GraphTitle
+from cedarkit.maps.painter.component_bindutils import fill_graph_title
 from cedarkit.maps.map import get_map_loader_class
 from cedarkit.maps.template import XYTemplate
+from cedarkit.maps.domains.layout import LayoutConfig
 
 if TYPE_CHECKING:
     from cedarkit.maps.chart import Chart, Panel, Layer
@@ -65,6 +67,8 @@ class MapTemplate(XYTemplate):
         地图区域范围。
     map_projection : ccrs.Projection or None
         地图投影，用于 GeoAxes 的显示投影。默认与 ``projection`` 相同。
+    layout_config : LayoutConfig or None
+        布局配置。默认为 ``LayoutConfig()``。
 
     Attributes
     ----------
@@ -72,16 +76,8 @@ class MapTemplate(XYTemplate):
         坐标轴组件绑定器，用于绑定标题、色标、地图边框等。子类在 ``__init__`` 中初始化。
     main_map_painter : MapPainter or None
         主地图绑定器。子类在 ``load_map`` 中初始化。
-    width : float
-        主图层宽度（相对于 figure）。
-    height : float
-        主图层高度（相对于 figure）。
-    main_aspect : float or None
-        主图层长宽比。
-    main_xticks_interval : float
-        主图层经度刻度间隔。
-    main_yticks_interval : float
-        主图层纬度刻度间隔。
+    layout_config : LayoutConfig
+        布局配置，包含 width、height、aspect、xticks_interval、yticks_interval。
     """
 
     def __init__(
@@ -89,6 +85,7 @@ class MapTemplate(XYTemplate):
             projection: ccrs.Projection,
             area: Union[AreaRange, Tuple[float, float, float, float]],
             map_projection: Optional[ccrs.Projection] = None,
+            layout_config: Optional[LayoutConfig] = None,
     ):
         super().__init__()
 
@@ -107,17 +104,68 @@ class MapTemplate(XYTemplate):
         else:
             self._map_projection = map_projection
 
-        # 布局参数，子类覆盖
-        self.width = 0.75
-        self.height = 0.6
-        self.main_aspect: Optional[float] = None
-        self.main_xticks_interval = 10
-        self.main_yticks_interval = 5
+        # 布局配置
+        if layout_config is None:
+            self.layout_config = LayoutConfig()
+        else:
+            self.layout_config = layout_config
 
         # painter，子类初始化
         self.axes_component_painter: Optional["AxesComponentPainter"] = None
         self.main_map_painter: Optional["MapPainter"] = None
         self.map_loader_class = get_map_loader_class()
+
+    # =====================
+    # 布局属性（向后兼容代理）
+    # =====================
+    # 子类目前直接设置 self.width 等属性。
+    # 这些 property 将读写代理到 self.layout_config，
+    # 确保子类在 task 5.3 更新前仍能正常工作。
+
+    @property
+    def width(self) -> float:
+        """float : 主图层宽度（相对于 figure）。"""
+        return self.layout_config.width
+
+    @width.setter
+    def width(self, value: float):
+        self.layout_config.width = value
+
+    @property
+    def height(self) -> float:
+        """float : 主图层高度（相对于 figure）。"""
+        return self.layout_config.height
+
+    @height.setter
+    def height(self, value: float):
+        self.layout_config.height = value
+
+    @property
+    def main_aspect(self) -> Optional[float]:
+        """float or None : 主图层长宽比。"""
+        return self.layout_config.aspect
+
+    @main_aspect.setter
+    def main_aspect(self, value: Optional[float]):
+        self.layout_config.aspect = value
+
+    @property
+    def main_xticks_interval(self) -> float:
+        """float : 主图层经度刻度间隔。"""
+        return self.layout_config.xticks_interval
+
+    @main_xticks_interval.setter
+    def main_xticks_interval(self, value: float):
+        self.layout_config.xticks_interval = value
+
+    @property
+    def main_yticks_interval(self) -> float:
+        """float : 主图层纬度刻度间隔。"""
+        return self.layout_config.yticks_interval
+
+    @main_yticks_interval.setter
+    def main_yticks_interval(self, value: float):
+        self.layout_config.yticks_interval = value
 
     # =====================
     # 属性
@@ -137,6 +185,7 @@ class MapTemplate(XYTemplate):
     def map_projection(self) -> ccrs.Projection:
         """ccrs.Projection : 地图显示投影。"""
         return self._map_projection
+
 
     # =========================================
     # 外部接口（供 Panel 和用户代码调用）
@@ -274,7 +323,7 @@ class MapTemplate(XYTemplate):
             创建的主图层。
         """
         layer = self._create_main_layer(chart)
-        layer.set_area(area=self.area, aspect=self.main_aspect)
+        layer.set_area(area=self.area, aspect=self.layout_config.aspect)
         self.setup_bindaxis(layer)
         self._apply_gridlines(layer)
         self._apply_map(layer)
@@ -321,6 +370,7 @@ class MapTemplate(XYTemplate):
         self._apply_map(layer=layer, map_painter=map_painter)
         return layer
 
+
     # =========================================
     # 钩子方法（子类按需重写）
     # =========================================
@@ -342,7 +392,7 @@ class MapTemplate(XYTemplate):
         """
         设置坐标轴。
 
-        默认根据 ``area`` 和 ``main_xticks_interval`` / ``main_yticks_interval`` 生成。
+        默认根据 ``area`` 和 ``layout_config.xticks_interval`` / ``layout_config.yticks_interval`` 生成。
         NorthPolar、Global 等需要特殊坐标轴的子类应重写。
 
         Parameters
@@ -353,13 +403,13 @@ class MapTemplate(XYTemplate):
         area = self.area
         xticks = np.arange(
             area.start_longitude,
-            area.end_longitude + self.main_xticks_interval / 10,
-            self.main_xticks_interval,
+            area.end_longitude + self.layout_config.xticks_interval / 10,
+            self.layout_config.xticks_interval,
         )
         yticks = np.arange(
             area.start_latitude,
-            area.end_latitude + self.main_yticks_interval / 10,
-            self.main_yticks_interval,
+            area.end_latitude + self.layout_config.yticks_interval / 10,
+            self.layout_config.yticks_interval,
         )
         layer.set_axis(xticks=xticks, yticks=yticks)
 
@@ -388,13 +438,13 @@ class MapTemplate(XYTemplate):
         area = self.area
         xticks = np.arange(
             area.start_longitude,
-            area.end_longitude + self.main_xticks_interval / 10,
-            self.main_xticks_interval,
+            area.end_longitude + self.layout_config.xticks_interval / 10,
+            self.layout_config.xticks_interval,
         )
         yticks = np.arange(
             area.start_latitude,
-            area.end_latitude + self.main_yticks_interval / 10,
-            self.main_yticks_interval,
+            area.end_latitude + self.layout_config.yticks_interval / 10,
+            self.layout_config.yticks_interval,
         )
         return xticks, yticks
 
@@ -445,7 +495,7 @@ class MapTemplate(XYTemplate):
         Layer
             创建的图层。
         """
-        rect = self._create_rect(self.width, self.height)
+        rect = self._create_rect(self.layout_config.width, self.layout_config.height)
         return chart.create_layer(
             rect=rect,
             projection=self.projection,
@@ -469,8 +519,8 @@ class MapTemplate(XYTemplate):
             图层的位置和尺寸。
         """
         return AxesRect(
-            left=(1 - self.width) / 2,
-            bottom=(1 - self.height) / 2,
+            left=(1 - self.layout_config.width) / 2,
+            bottom=(1 - self.layout_config.height) / 2,
             width=width,
             height=height,
         )
