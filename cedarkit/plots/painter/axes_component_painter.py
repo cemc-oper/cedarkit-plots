@@ -1,14 +1,14 @@
 from dataclasses import dataclass
 from typing import Optional, Tuple, Union, List, Literal
 
-from cedarkit.maps.chart import Layer
-from cedarkit.maps.types import GraphTitle, GraphColorbar
-from cedarkit.maps.bindutils import draw_map_box
-from cedarkit.maps.painter.component_bindutils import (
+from cedarkit.plots.chart import Layer
+from cedarkit.plots.types import GraphTitle, GraphColorbar
+from cedarkit.plots.bindutils import draw_map_box
+from cedarkit.plots.painter.component_bindutils import (
     set_map_box_title,
     add_map_box_colorbar,
 )
-from cedarkit.maps.style import ContourStyle
+from cedarkit.plots.style import ContourStyle
 
 
 @dataclass

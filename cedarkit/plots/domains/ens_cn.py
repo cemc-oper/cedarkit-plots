@@ -4,23 +4,23 @@ import numpy as np
 import pandas as pd
 from cartopy import crs as ccrs
 
-from cedarkit.maps.style import ContourStyle
-from cedarkit.maps.chart import Layer
-from cedarkit.maps.types import AreaRange, GraphTitle
-from cedarkit.maps.painter.component_bindutils import (
+from cedarkit.plots.style import ContourStyle
+from cedarkit.plots.chart import Layer
+from cedarkit.plots.types import AreaRange, GraphTitle
+from cedarkit.plots.painter.component_bindutils import (
     fill_graph_title,
     set_map_box_title,
 )
-from cedarkit.maps.util import clear_axes
-from cedarkit.maps.painter.axes_component_painter import (
+from cedarkit.plots.util import clear_axes
+from cedarkit.plots.painter.axes_component_painter import (
     AxesComponentPainter, MapBoxOption, ColorBarOption,
 )
-from cedarkit.maps.painter.presets import create_china_map_painter
+from cedarkit.plots.painter.presets import create_china_map_painter
 
 from .map_template import MapTemplate
 
 if TYPE_CHECKING:
-    from cedarkit.maps.chart import Chart, Panel
+    from cedarkit.plots.chart import Chart, Panel
 
 
 #: 集合预报中国区域（73°E–135°E, 16°N–56°N）

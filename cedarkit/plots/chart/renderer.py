@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Any, Dict, Type, TYPE_CHECKING
 
-from cedarkit.maps.style import Style, ContourStyle, BarbStyle
+from cedarkit.plots.style import Style, ContourStyle, BarbStyle
 
 if TYPE_CHECKING:
     from .layer import Layer

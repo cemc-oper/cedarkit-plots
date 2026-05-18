@@ -3,11 +3,11 @@ import warnings
 from typing import TYPE_CHECKING, Dict, Optional
 from dataclasses import dataclass, field
 
-from cedarkit.maps.map import MapLoader
-from cedarkit.maps.painter.component_bindutils import add_map_info_text
+from cedarkit.plots.map import MapLoader
+from cedarkit.plots.painter.component_bindutils import add_map_info_text
 
 if TYPE_CHECKING:
-    from cedarkit.maps.chart import Layer
+    from cedarkit.plots.chart import Layer
 
 
 @dataclass

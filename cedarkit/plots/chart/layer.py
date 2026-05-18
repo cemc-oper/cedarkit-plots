@@ -7,22 +7,22 @@ import matplotlib.contour
 import matplotlib.quiver
 import cartopy.crs as ccrs
 
-from cedarkit.maps.style import ContourStyle, BarbStyle, ContourLabelStyle
-from cedarkit.maps.graph import (
+from cedarkit.plots.style import ContourStyle, BarbStyle, ContourLabelStyle
+from cedarkit.plots.graph import (
     add_contourf,
     add_contour,
     add_contour_label,
     add_barb,
 )
-from cedarkit.maps.types import AreaRange
-from cedarkit.maps.bindutils import (
+from cedarkit.plots.types import AreaRange
+from cedarkit.plots.bindutils import (
     set_map_box_area,
     set_map_box_axis,
     draw_map_box_gridlines,
 )
 
 if TYPE_CHECKING:
-    from cedarkit.maps.chart import Chart
+    from cedarkit.plots.chart import Chart
 
 
 class Layer:

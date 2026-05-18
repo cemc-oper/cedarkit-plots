@@ -3,9 +3,9 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
-from cedarkit.maps.domains import EastAsiaMapTemplate
-from cedarkit.maps.chart import Panel
-from cedarkit.maps.style import ContourStyle
+from cedarkit.plots.domains import EastAsiaMapTemplate
+from cedarkit.plots.chart import Panel
+from cedarkit.plots.style import ContourStyle
 
 
 class TestEastAsiaMapTemplateContourf:

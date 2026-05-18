@@ -1,7 +1,7 @@
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from cedarkit.maps.chart import Panel
+    from cedarkit.plots.chart import Panel
 
 
 class XYTemplate:

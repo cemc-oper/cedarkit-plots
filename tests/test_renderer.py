@@ -3,8 +3,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from cedarkit.maps.style import Style, ContourStyle, BarbStyle
-from cedarkit.maps.chart.renderer import (
+from cedarkit.plots.style import Style, ContourStyle, BarbStyle
+from cedarkit.plots.chart.renderer import (
     PlotRenderer,
     ContourRenderer,
     BarbRenderer,

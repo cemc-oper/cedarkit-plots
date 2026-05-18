@@ -9,7 +9,7 @@ import matplotlib.text
 import matplotlib.colors as mcolors
 import cartopy.mpl.geoaxes
 
-from cedarkit.maps.types import GraphTitle, GraphColorbar
+from cedarkit.plots.types import GraphTitle, GraphColorbar
 
 
 def fill_graph_title(

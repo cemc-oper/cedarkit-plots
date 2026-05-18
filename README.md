@@ -1,9 +1,9 @@
-# cedarkit-maps
+# cedarkit-plots
 
-![GitHub Release](https://img.shields.io/github/v/release/cemc-oper/cedarkit-maps)
-![PyPI - Version](https://img.shields.io/pypi/v/cedarkit-maps)
-![GitHub License](https://img.shields.io/github/license/cemc-oper/cedarkit-maps)
-![GitHub Action Workflow Status](https://github.com/cemc-oper/cedarkit-maps/actions/workflows/ci.yaml/badge.svg)
+![GitHub Release](https://img.shields.io/github/v/release/cemc-oper/cedarkit-plots)
+![PyPI - Version](https://img.shields.io/pypi/v/cedarkit-plots)
+![GitHub License](https://img.shields.io/github/license/cemc-oper/cedarkit-plots)
+![GitHub Action Workflow Status](https://github.com/cemc-oper/cedarkit-plots/actions/workflows/ci.yaml/badge.svg)
 
 A plotting tool for meteorology data.
 
@@ -12,7 +12,7 @@ A plotting tool for meteorology data.
 Install using pip:
 
 ```bash
-pip install cedarkit-maps
+pip install cedarkit-plots
 ```
 
 Or download the latest source code from GitHub and install manually.
@@ -60,8 +60,8 @@ In this example, a NCL colormap embedded in the project is used.
 ```py
 import numpy as np
 import matplotlib.colors as mcolors
-from cedarkit.maps.colormap import get_ncl_colormap
-from cedarkit.maps.style import ContourStyle
+from cedarkit.plots.colormap import get_ncl_colormap
+from cedarkit.plots.style import ContourStyle
 
 t_2m_level = [-24, -20, -16, -12, -8, -4, 0, 4, 8, 12, 16, 20, 24, 28, 32]
 
@@ -80,7 +80,7 @@ Create a build-in template `EastAsiaMapTemplate`.
 A template is a pre-defined layout to put title, text info, colorbar in some position. 
 
 ```py
-from cedarkit.maps.domains import EastAsiaMapTemplate
+from cedarkit.plots.domains import EastAsiaMapTemplate
 
 domain = EastAsiaMapTemplate()
 ```
@@ -88,7 +88,7 @@ domain = EastAsiaMapTemplate()
 Create plot panel and plot the field:
 
 ```py
-from cedarkit.maps.chart import Panel
+from cedarkit.plots.chart import Panel
 
 panel = Panel(domain=domain)
 panel.plot(field_t_2m, style=t_2m_style)
@@ -117,10 +117,10 @@ panel.show()
 
 Copyright &copy; 2021-2026, developers at cemc-oper.
 
-`cedarkit-maps` is licensed under [Apache License V2.0](./LICENSE)
+`cedarkit-plots` is licensed under [Apache License V2.0](./LICENSE)
 
 ### Third party
 
-cedarkit/maps/resources/map/china-shapefiles is from project [dongli/china-shapefiles](https://github.com/dongli/china-shapefiles).
+cedarkit/plots/resources/map/china-shapefiles is from project [dongli/china-shapefiles](https://github.com/dongli/china-shapefiles).
 
-cedarkit/maps/resources/colormap/ncl is from project [NCL](https://github.com/NCAR/ncl).
+cedarkit/plots/resources/colormap/ncl is from project [NCL](https://github.com/NCAR/ncl).

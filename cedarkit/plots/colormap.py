@@ -75,7 +75,7 @@ def _get_raw_ncl_colormap(name) -> Optional[mcolors.ListedColormap]:
     """
     color_map_path = None
 
-    ref = importlib.resources.files("cedarkit.maps") / "resources/colormap/ncl"
+    ref = importlib.resources.files("cedarkit.plots") / "resources/colormap/ncl"
     if color_map_path is None:
         with importlib.resources.as_file(ref / f"{name}.rgb") as file_path:
             if file_path.exists():
@@ -112,7 +112,7 @@ def generate_colormap_using_ncl_colors(color_names: List[str], name: str) -> mco
     -------
     matplotlib.colors.ListedColormap
     """
-    color_map_dir = importlib.resources.files("cedarkit.maps") / "resources/colormap/ncl"
+    color_map_dir = importlib.resources.files("cedarkit.plots") / "resources/colormap/ncl"
     with importlib.resources.as_file(color_map_dir / f"ncl_colors.csv") as color_names_csv:
         df = pd.read_csv(color_names_csv)
         df["name"] = df["name"].str.lower()

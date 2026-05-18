@@ -1,9 +1,9 @@
 from typing import List, Optional, Any, TYPE_CHECKING
 from cartopy import crs as ccrs
 
-from cedarkit.maps.style import Style
-from cedarkit.maps.types import AxesRect
-from cedarkit.maps.template import XYTemplate
+from cedarkit.plots.style import Style
+from cedarkit.plots.types import AxesRect
+from cedarkit.plots.template import XYTemplate
 
 from .layer import Layer
 from .renderer import get_renderer

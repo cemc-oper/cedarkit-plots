@@ -165,7 +165,7 @@ map_class = DefaultMapLoader
 
 
 def get_china_map():
-    ref = importlib.resources.files("cedarkit.maps") / "resources/map/china-shapefiles/shapefiles/china.shp"
+    ref = importlib.resources.files("cedarkit.plots") / "resources/map/china-shapefiles/shapefiles/china.shp"
     with importlib.resources.as_file(ref) as china_shape_file:
         if not china_shape_file.exists():
             raise FileNotFoundError(f"Shapefile not found: {china_shape_file}")
@@ -183,7 +183,7 @@ def get_china_map():
 
 
 def get_china_nine_map():
-    ref = importlib.resources.files("cedarkit.maps") / "resources/map/china-shapefiles/shapefiles/china_nine_dotted_line.shp"
+    ref = importlib.resources.files("cedarkit.plots") / "resources/map/china-shapefiles/shapefiles/china_nine_dotted_line.shp"
     with importlib.resources.as_file(ref) as china_nine_dotted_shape_file:
         if not china_nine_dotted_shape_file.exists():
             raise FileNotFoundError(f"Shapefile not found: {china_nine_dotted_shape_file}")

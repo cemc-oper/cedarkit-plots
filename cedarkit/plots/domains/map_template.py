@@ -5,17 +5,17 @@ import numpy as np
 import pandas as pd
 import cartopy.crs as ccrs
 
-from cedarkit.maps.style import ContourStyle
-from cedarkit.maps.types import AreaRange, AxesRect, GraphTitle
-from cedarkit.maps.painter.component_bindutils import fill_graph_title
-from cedarkit.maps.map import get_map_loader_class
-from cedarkit.maps.template import XYTemplate
-from cedarkit.maps.domains.layout import LayoutConfig
+from cedarkit.plots.style import ContourStyle
+from cedarkit.plots.types import AreaRange, AxesRect, GraphTitle
+from cedarkit.plots.painter.component_bindutils import fill_graph_title
+from cedarkit.plots.map import get_map_loader_class
+from cedarkit.plots.template import XYTemplate
+from cedarkit.plots.domains.layout import LayoutConfig
 
 if TYPE_CHECKING:
-    from cedarkit.maps.chart import Chart, Panel, Layer
-    from cedarkit.maps.painter.map_painter import MapPainter
-    from cedarkit.maps.painter.axes_component_painter import AxesComponentPainter
+    from cedarkit.plots.chart import Chart, Panel, Layer
+    from cedarkit.plots.painter.map_painter import MapPainter
+    from cedarkit.plots.painter.axes_component_painter import AxesComponentPainter
 
 
 @dataclass

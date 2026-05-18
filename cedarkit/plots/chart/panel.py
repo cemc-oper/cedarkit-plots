@@ -4,8 +4,8 @@ from typing import Optional, Tuple, Union, List, Any, Iterable, TYPE_CHECKING
 import matplotlib.pyplot as plt
 import xarray as xr
 
-from cedarkit.maps.style import Style
-from cedarkit.maps.template import XYTemplate
+from cedarkit.plots.style import Style
+from cedarkit.plots.template import XYTemplate
 
 from .chart import Chart
 

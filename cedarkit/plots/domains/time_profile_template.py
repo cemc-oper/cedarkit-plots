@@ -3,10 +3,10 @@ from typing import TYPE_CHECKING, List, Callable
 import pandas as pd
 import numpy as np
 
-from cedarkit.maps.template import XYTemplate
+from cedarkit.plots.template import XYTemplate
 
 if TYPE_CHECKING:
-    from cedarkit.maps.chart import Panel, Layer
+    from cedarkit.plots.chart import Panel, Layer
 
 
 class TimeStepAndLevelXYTemplate(XYTemplate):

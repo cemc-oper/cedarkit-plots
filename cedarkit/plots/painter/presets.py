@@ -5,8 +5,8 @@ MapPainter 预设配置工厂函数。
 """
 from typing import Optional
 
-from cedarkit.maps.map import get_map_loader_class, MapType, MapLoader
-from cedarkit.maps.painter.map_painter import (
+from cedarkit.plots.map import get_map_loader_class, MapType, MapLoader
+from cedarkit.plots.painter.map_painter import (
     MapPainter, MapFeatureConfig, MapInfo
 )
 

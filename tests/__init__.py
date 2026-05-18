@@ -1,1 +1,1 @@
-# cedarkit-maps tests
+# cedarkit-plots tests

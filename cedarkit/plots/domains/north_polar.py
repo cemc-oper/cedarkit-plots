@@ -4,19 +4,19 @@ import numpy as np
 from cartopy import crs as ccrs
 import matplotlib.path as mpath
 
-from cedarkit.maps.chart import Layer
-from cedarkit.maps.types import AreaRange
-from cedarkit.maps.painter.map_painter import MapPainter, MapInfo
-from cedarkit.maps.painter.axes_component_painter import (
+from cedarkit.plots.chart import Layer
+from cedarkit.plots.types import AreaRange
+from cedarkit.plots.painter.map_painter import MapPainter, MapInfo
+from cedarkit.plots.painter.axes_component_painter import (
     AxesComponentPainter, MapBoxOption, ColorBarOption,
 )
-from cedarkit.maps.painter.presets import create_china_map_painter
+from cedarkit.plots.painter.presets import create_china_map_painter
 
 from .layout import LayoutConfig
 from .map_template import MapTemplate
 
 if TYPE_CHECKING:
-    from cedarkit.maps.chart import Chart, Panel
+    from cedarkit.plots.chart import Chart, Panel
 
 
 #: 北极投影默认区域（全球北半球）

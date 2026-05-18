@@ -8,8 +8,8 @@ import matplotlib
 matplotlib.use('Agg')  # 使用非交互式后端，避免弹出窗口
 import matplotlib.colors as mcolors
 
-from cedarkit.maps.style import ContourStyle, BarbStyle
-from cedarkit.maps.colormap import get_ncl_colormap, generate_colormap_using_ncl_colors
+from cedarkit.plots.style import ContourStyle, BarbStyle
+from cedarkit.plots.colormap import get_ncl_colormap, generate_colormap_using_ncl_colors
 
 
 @pytest.fixture

@@ -1,1 +1,1 @@
-# Integration tests for cedarkit-maps
+# Integration tests for cedarkit-plots

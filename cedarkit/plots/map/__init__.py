@@ -6,7 +6,7 @@ import cartopy.feature as cfeature
 import matplotlib.axes
 
 
-DEFAULT_MAP_LOADER_PACKAGE = "cedarkit.maps.map.default"
+DEFAULT_MAP_LOADER_PACKAGE = "cedarkit.plots.map.default"
 
 
 class MapType(Enum):
@@ -92,7 +92,7 @@ def set_default_map_loader_package(map_package: str):
     Parameters
     ----------
     map_package
-        地图包字符串，例如 ``cedarkit.maps.map.default``
+        地图包字符串，例如 ``cedarkit.plots.map.default``
 
     Returns
     -------

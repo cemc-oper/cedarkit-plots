@@ -4,20 +4,20 @@ import numpy as np
 import pandas as pd
 from cartopy import crs as ccrs
 
-from cedarkit.maps.chart import Layer
-from cedarkit.maps.map import MapType
-from cedarkit.maps.types import AreaRange, GraphTitle
-from cedarkit.maps.painter.map_painter import MapPainter, MapInfo
-from cedarkit.maps.painter.axes_component_painter import (
+from cedarkit.plots.chart import Layer
+from cedarkit.plots.map import MapType
+from cedarkit.plots.types import AreaRange, GraphTitle
+from cedarkit.plots.painter.map_painter import MapPainter, MapInfo
+from cedarkit.plots.painter.axes_component_painter import (
     AxesComponentPainter, MapBoxOption, ColorBarOption,
 )
-from cedarkit.maps.painter.presets import create_global_map_painter
+from cedarkit.plots.painter.presets import create_global_map_painter
 
 from .layout import LayoutConfig
 from .map_template import MapTemplate
 
 if TYPE_CHECKING:
-    from cedarkit.maps.chart import Chart, Panel
+    from cedarkit.plots.chart import Chart, Panel
 
 
 #: 全球默认区域

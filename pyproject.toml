@@ -3,7 +3,7 @@ requires = ["setuptools>=64", "setuptools_scm>=8"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "cedarkit-maps"
+name = "cedarkit-plots"
 authors = [
     {name="Wang Dapeng", email="perillaroc@gmail.com"}
 ]
@@ -31,8 +31,8 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/cemc-oper/cedarkit-maps"
-Repository = "https://github.com/cemc-oper/cedarkit-maps.git"
+Homepage = "https://github.com/cemc-oper/cedarkit-plots"
+Repository = "https://github.com/cemc-oper/cedarkit-plots.git"
 
 [project.optional-dependencies]
 test = ["pytest", "scipy"]
@@ -40,13 +40,13 @@ cov = ["pytest-cov"]
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["cedarkit.maps", "cedarkit.maps.*"]
+include = ["cedarkit.plots", "cedarkit.plots.*"]
 
 [tool.setuptools]
 include-package-data = true
 
 [tool.setuptools_scm]
-version_file = "cedarkit/maps/_version.py"
+version_file = "cedarkit/plots/_version.py"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

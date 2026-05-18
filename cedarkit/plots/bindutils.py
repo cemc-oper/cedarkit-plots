@@ -9,7 +9,7 @@ import cartopy.mpl.gridliner
 from cartopy import crs as ccrs
 from cartopy.mpl.ticker import LongitudeFormatter, LatitudeFormatter
 
-from cedarkit.maps.types import AreaRange
+from cedarkit.plots.types import AreaRange
 
 
 def set_map_box_area(

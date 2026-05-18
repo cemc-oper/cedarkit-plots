@@ -2,8 +2,8 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
-from cedarkit.maps.domains import GlobalMapTemplate
-from cedarkit.maps.chart import Panel
+from cedarkit.plots.domains import GlobalMapTemplate
+from cedarkit.plots.chart import Panel
 
 
 class TestGlobalMapTemplateContourf:
