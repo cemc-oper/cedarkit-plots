@@ -109,8 +109,8 @@ def pressure_contour_style():
 @pytest.fixture
 def east_asia_coords():
     """东亚区域坐标网格"""
-    lons = np.linspace(70, 140, 141)  # 0.5度分辨率
-    lats = np.linspace(15, 55, 81)
+    lons = np.linspace(70, 140, 71)  # 1.0度分辨率
+    lats = np.linspace(15, 55, 41)
     return lons, lats
 
 
@@ -261,8 +261,8 @@ def east_asia_precipitation_field(east_asia_coords):
 @pytest.fixture
 def north_polar_coords():
     """北极区域坐标网格（全球）"""
-    lons = np.linspace(-180, 180, 361)  # 1度分辨率
-    lats = np.linspace(0, 90, 91)
+    lons = np.linspace(-180, 180, 73)  # 5度分辨率
+    lats = np.linspace(0, 90, 19)
     return lons, lats
 
 
@@ -359,8 +359,8 @@ def north_polar_wind_fields(north_polar_coords):
 @pytest.fixture
 def europe_asia_coords():
     """欧亚区域坐标网格"""
-    lons = np.linspace(20, 170, 151)  # 1度分辨率
-    lats = np.linspace(0, 70, 71)
+    lons = np.linspace(20, 170, 31)  # 5度分辨率
+    lats = np.linspace(0, 70, 15)
     return lons, lats
 
 
@@ -465,8 +465,8 @@ def europe_asia_wind_fields(europe_asia_coords):
 @pytest.fixture
 def global_coords():
     """全球坐标网格"""
-    lons = np.linspace(-180, 180, 361)  # 1度分辨率
-    lats = np.linspace(-90, 90, 181)
+    lons = np.linspace(-180, 180, 73)  # 5度分辨率
+    lats = np.linspace(-90, 90, 37)
     return lons, lats
 
 
@@ -562,8 +562,8 @@ def global_wind_fields(global_coords):
 @pytest.fixture
 def ens_cn_coords():
     """集合预报中国区域坐标网格（73°E–135°E, 16°N–56°N）"""
-    lons = np.linspace(73, 135, 125)  # ~0.5度分辨率
-    lats = np.linspace(16, 56, 81)
+    lons = np.linspace(73, 133, 13)  # 5度分辨率
+    lats = np.linspace(16, 56, 9)
     return lons, lats
 
 
