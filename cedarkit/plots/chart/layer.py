@@ -3,6 +3,7 @@ from typing import Optional, TYPE_CHECKING
 import xarray as xr
 import numpy as np
 import matplotlib.axes
+import matplotlib.colors as mcolors
 import matplotlib.contour
 import matplotlib.quiver
 import cartopy.crs as ccrs
@@ -124,12 +125,18 @@ class Layer:
         return contour
 
     def contour(self, data: xr.DataArray, style: ContourStyle, **kwargs) -> matplotlib.contour.QuadContourSet:
+        # matplotlib's contour() expects colors as a sequence, not a Colormap.
+        # Convert ListedColormap/Colormap to a color list for compatibility.
+        colors = style.colors
+        if isinstance(colors, mcolors.Colormap):
+            colors = [colors(i) for i in range(colors.N)]
+
         contour = add_contour(
             self.ax,
             field=data,
             levels=style.levels,
             projection=self.projection,
-            colors=style.colors,
+            colors=colors,
             linewidths=style.linewidths,
             linestyles=style.linestyles,
             **kwargs
