@@ -36,6 +36,7 @@ Get local data file path using reki:
 
 ```py
 from reki.data_finder import find_local_file
+
 data_file_path = find_local_file(
     "cma_gfs_gmf/grib2/orig",
     start_time=start_time,
@@ -43,7 +44,7 @@ data_file_path = find_local_file(
 )
 ```
 
-Load 2m field from file and convert unit:
+Load 2m temperature field from file and convert unit:
 
 ```py
 from reki.format.grib.eccodes import load_field_from_file
