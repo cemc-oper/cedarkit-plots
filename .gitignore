@@ -45,6 +45,7 @@ htmlcov/
 .tox/
 .coverage
 .cache
+.pytest_cache/
 nosetests.xml
 coverage.xml
 
@@ -128,4 +129,9 @@ celerybeat.pid
 
 .vscode
 
-cedarkit/maps/_version.py
+# version
+cedarkit/plots/_version.py
+
+# test data
+tests/data
+tests/output
