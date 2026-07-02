@@ -130,7 +130,7 @@ celerybeat.pid
 .vscode
 
 # version
-cedarkit/plots/_version.py
+cedarkit/maps/_version.py
 
 # test data
 tests/data
