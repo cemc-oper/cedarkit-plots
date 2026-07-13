@@ -1,1 +1,3 @@
 cedarkit/maps/resources/* linguist-vendored
+* text eol=lf
+*.shp binary
