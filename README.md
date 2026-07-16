@@ -1,5 +1,6 @@
 # cedarkit-plots
 
+![Maturity-Sandbox](https://img.shields.io/badge/Maturity-Sandbox-F9D71C)
 ![GitHub Release](https://img.shields.io/github/v/release/cemc-oper/cedarkit-plots)
 ![PyPI - Version](https://img.shields.io/pypi/v/cedarkit-plots)
 ![GitHub License](https://img.shields.io/github/license/cemc-oper/cedarkit-plots)
