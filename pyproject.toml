@@ -39,6 +39,16 @@ Repository = "https://github.com/cemc-oper/cedarkit-plots.git"
 [project.optional-dependencies]
 test = ["pytest", "scipy"]
 cov = ["pytest-cov"]
+docs = [
+    "sphinx>=7.3",
+    "sphinx-book-theme>=1.1",
+    "myst-nb>=1.1",
+    "sphinx-copybutton>=0.5",
+    "sphinx-design>=0.6",
+    "linkify-it-py>=2.0",
+    "ipykernel>=6.29",
+    "matplotlib>=3.8",
+]
 
 [tool.setuptools.packages.find]
 where = ["."]
