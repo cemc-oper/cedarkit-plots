@@ -319,7 +319,7 @@ class PlotEngine:
         forecast_time = metadata.forecast_time
         context["forecast_hour"] = int(forecast_time / pd.Timedelta(hours=1))
         interval = getattr(metadata, "interval", None)
-        interval_hours = int(interval / pd.Timedelta(hours=1)) if interval is not None else 24
+        interval_hours = int(pd.to_timedelta(interval) / pd.Timedelta(hours=1)) if interval is not None else 24
         context["interval_hour"] = interval_hours
         context["previous_forecast_hour"] = context["forecast_hour"] - interval_hours
         graph_name = recipe.title.graph_name.format(**context)
@@ -537,3 +537,66 @@ class PlotModuleAdapter:
                 style=colorbar_styles[0] if len(colorbar_styles) == 1 else colorbar_styles,
             )
         return panel
+
+    # -- availability check --------------------------------------------------
+
+    def check_available(self, time_config=None, plot_config=None) -> bool:
+        """
+        Default availability check for recipe-driven plots.
+
+        A recipe is available for a time combination when every
+        ``time_diff`` transform can be satisfied, i.e. the field at
+        ``forecast_time - interval`` exists::
+
+            forecast_time >= interval   (for each time_diff)
+
+        Duck-typed contract (the engine does not know the caller's
+        config classes): ``time_config`` needs a ``forecast_time``
+        attribute; ``plot_config`` may carry a ``plot_params`` dict with
+        recipe parameter values. Intervals written as ``"{param}"``
+        templates are resolved from ``plot_params`` first, then from
+        param defaults. Python plot modules keep their own custom
+        ``check_available``; definitions without one are always
+        available.
+
+        Parameters
+        ----------
+        time_config
+            Object with a ``forecast_time`` attribute. ``None`` means no
+            time constraint, always available.
+        plot_config
+            Optional object with a ``plot_params`` dict attribute.
+
+        Returns
+        -------
+        bool
+            True when the plot can be produced for the time combination.
+        """
+        if time_config is None:
+            return True
+        forecast_time = pd.to_timedelta(time_config.forecast_time)
+
+        overrides = dict(getattr(plot_config, "plot_params", None) or {})
+        metadata = self.PlotMetadata(forecast_time=forecast_time)
+        for param_name, param in self.recipe.params.items():
+            value = overrides.get(param_name, param.default)
+            if value is None:
+                if param.required:
+                    raise RecipeError("<recipe>", f"required param {param_name!r} is missing")
+                continue
+            setattr(metadata, param_name, self._coerce_param(param, value))
+
+        for spec in self.recipe.data.values():
+            for transform in spec.transforms:
+                if transform.op != "time_diff":
+                    continue
+                interval = None
+                if transform.args:
+                    interval = resolve_templates(transform.args[0], metadata)
+                elif "interval" in transform.kwargs:
+                    interval = resolve_templates(transform.kwargs["interval"], metadata)
+                if interval is None:
+                    continue
+                if forecast_time < pd.to_timedelta(interval):
+                    return False
+        return True

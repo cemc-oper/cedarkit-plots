@@ -472,3 +472,82 @@ class TestLoaderIntegration:
     def test_engine_required_for_recipe_lookup(self):
         with pytest.raises(ValueError, match="engine"):
             get_plot_definition("cn.t2m", "x", recipe_base_module="recipes")
+
+
+@dataclass
+class FakeTimeConfig:
+    forecast_time: pd.Timedelta
+
+
+@dataclass
+class FakePlotConfig:
+    plot_params: Optional[dict] = None
+
+
+RAIN_RECIPE = """
+name: x
+domain: { default: east_asia, area: cn_area }
+params:
+  interval: { type: timedelta, required: true }
+data:
+  t2m:
+    field: t2m
+    transforms:
+      - { op: time_diff, args: ["{interval}"] }
+layers:
+  - { field: t2m, style: t2m }
+title: { graph_name: "rain" }
+"""
+
+RAIN_24H_RECIPE = """
+name: x
+domain: { default: east_asia, area: cn_area }
+params:
+  interval: { type: timedelta, default: 24h }
+data:
+  t2m:
+    field: t2m
+    transforms:
+      - { op: time_diff, args: ["{interval}"] }
+layers:
+  - { field: t2m, style: t2m }
+title: { graph_name: "rain" }
+"""
+
+
+class TestCheckAvailable:
+    """Engine default check_available: forecast_time must cover time_diff intervals."""
+
+    def test_no_time_diff_always_available(self, engine, tmp_path):
+        module = engine.build_module(engine.load_recipe(write_recipe(tmp_path, "t2m.yaml", T2M_RECIPE)))
+        assert module.check_available(FakeTimeConfig(pd.Timedelta(hours=0))) is True
+        assert module.check_available(FakeTimeConfig(pd.Timedelta(hours=24))) is True
+
+    def test_static_interval(self, engine, tmp_path):
+        module = engine.build_module(engine.load_recipe(write_recipe(tmp_path, "r.yaml", RAIN_24H_RECIPE)))
+        assert module.check_available(FakeTimeConfig(pd.Timedelta(hours=0))) is False
+        assert module.check_available(FakeTimeConfig(pd.Timedelta(hours=12))) is False
+        assert module.check_available(FakeTimeConfig(pd.Timedelta(hours=24))) is True
+        assert module.check_available(FakeTimeConfig(pd.Timedelta(hours=48))) is True
+
+    def test_param_interval_from_plot_params(self, engine, tmp_path):
+        module = engine.build_module(engine.load_recipe(write_recipe(tmp_path, "r.yaml", RAIN_RECIPE)))
+        plot_config = FakePlotConfig(plot_params={"interval": "3h"})
+        assert module.check_available(FakeTimeConfig(pd.Timedelta(hours=1)), plot_config) is False
+        assert module.check_available(FakeTimeConfig(pd.Timedelta(hours=3)), plot_config) is True
+        assert module.check_available(FakeTimeConfig(pd.Timedelta(hours=6)), plot_config) is True
+
+    def test_param_interval_accepts_timedelta_value(self, engine, tmp_path):
+        module = engine.build_module(engine.load_recipe(write_recipe(tmp_path, "r.yaml", RAIN_RECIPE)))
+        plot_config = FakePlotConfig(plot_params={"interval": pd.Timedelta(hours=6)})
+        assert module.check_available(FakeTimeConfig(pd.Timedelta(hours=3)), plot_config) is False
+        assert module.check_available(FakeTimeConfig(pd.Timedelta(hours=6)), plot_config) is True
+
+    def test_missing_required_param_raises(self, engine, tmp_path):
+        module = engine.build_module(engine.load_recipe(write_recipe(tmp_path, "r.yaml", RAIN_RECIPE)))
+        with pytest.raises(RecipeError, match="interval"):
+            module.check_available(FakeTimeConfig(pd.Timedelta(hours=24)), FakePlotConfig())
+
+    def test_none_time_config_is_available(self, engine, tmp_path):
+        module = engine.build_module(engine.load_recipe(write_recipe(tmp_path, "r.yaml", RAIN_24H_RECIPE)))
+        assert module.check_available() is True
