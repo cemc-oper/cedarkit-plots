@@ -21,4 +21,4 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install .[test]
       - name: Run tests
-        run: python -m pytest tests/integration -v
+        run: python -m pytest tests -v
