@@ -6,24 +6,6 @@ import matplotlib.colors as mcolors
 import matplotlib.ticker as mticker
 
 
-PARAMETER_MAP = {
-    "2t": "t2m",
-}
-
-
-PLOT_STYLE = dict(
-    t2m=dict(
-        colormap=dict(
-            category="ncl",
-            name="temp_19lev"
-        ),
-        contour=dict(
-            levels=np.append(np.arange(-30, 40, 4), 40)
-        )
-    )
-)
-
-
 @dataclass
 class Style:
     def validate(self):

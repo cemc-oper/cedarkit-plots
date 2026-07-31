@@ -35,6 +35,22 @@ SOUTH_CHINA_SEA_AREA = AreaRange(
     end_latitude=23,
 )
 
+#: 主图默认地图信息标注（含审图号）。
+#: 审图号 GS (2019) 1786 为 CEMC 业务约定：依据自然资源部标准地图
+#: 编制业务用图时须标注对应审图号；非业务出图可通过构造参数替换或置空。
+EAST_ASIA_MAP_INFO = MapInfo(
+    x=0.998,
+    y=0.0022,
+    text="Scale 1:20000000 No:GS (2019) 1786",
+)
+
+#: 南海子图默认地图信息标注（CEMC 业务约定，无审图号）。
+SOUTH_CHINA_SEA_MAP_INFO = MapInfo(
+    x=0.99,
+    y=0.01,
+    text="Scale 1:40000000",
+)
+
 
 class EastAsiaMapTemplate(MapTemplate):
     """
@@ -57,6 +73,13 @@ class EastAsiaMapTemplate(MapTemplate):
         主图地图绑定器。默认在 ``load_map()`` 中使用中国区域预设创建。
     sub_map_painter : MapPainter or None
         南海子图地图绑定器。默认在 ``load_map()`` 中使用南海预设创建。
+    main_map_info : MapInfo or None
+        主图地图信息标注（比例尺与审图号）。默认为 ``EAST_ASIA_MAP_INFO``
+        （CEMC 业务约定，含审图号 GS (2019) 1786）。仅当未注入
+        ``main_map_painter`` 时生效。
+    sub_map_info : MapInfo or None
+        南海子图地图信息标注。默认为 ``SOUTH_CHINA_SEA_MAP_INFO``。
+        仅当未注入 ``sub_map_painter`` 时生效。
     """
     def __init__(
             self,
@@ -66,6 +89,8 @@ class EastAsiaMapTemplate(MapTemplate):
             axes_component_painter: Optional[AxesComponentPainter] = None,
             main_map_painter: Optional[MapPainter] = None,
             sub_map_painter: Optional[MapPainter] = None,
+            main_map_info: Optional[MapInfo] = None,
+            sub_map_info: Optional[MapInfo] = None,
     ):
         if area is None:
             area = EAST_ASIA_AREA
@@ -80,6 +105,14 @@ class EastAsiaMapTemplate(MapTemplate):
         )
 
         self.with_sub_area = with_sub_area
+
+        # 地图信息标注（审图号为 CEMC 业务约定，可显式替换）
+        if main_map_info is None:
+            main_map_info = EAST_ASIA_MAP_INFO
+        if sub_map_info is None:
+            sub_map_info = SOUTH_CHINA_SEA_MAP_INFO
+        self.main_map_info = main_map_info
+        self.sub_map_info = sub_map_info
 
         # 南海子图层配置
         self.sub_map_config = SubMapConfig(
@@ -141,22 +174,16 @@ class EastAsiaMapTemplate(MapTemplate):
         如果构造函数中已注入了 painter，则跳过对应的创建。
         主图使用中国区域预设（含海岸线、湖泊、省界等），
         南海子图使用南海预设（含海岸线、省界等，无湖泊）。
+        地图信息标注（比例尺、审图号）取自构造参数
+        ``main_map_info`` / ``sub_map_info``，默认值为 CEMC 业务约定。
         """
         if self.main_map_painter is None:
             self.main_map_painter = create_china_map_painter(
-                map_info=MapInfo(
-                    x=0.998,
-                    y=0.0022,
-                    text="Scale 1:20000000 No:GS (2019) 1786",
-                ),
+                map_info=self.main_map_info,
             )
         if self.sub_map_painter is None:
             self.sub_map_painter = create_south_china_sea_painter(
-                map_info=MapInfo(
-                    x=0.99,
-                    y=0.01,
-                    text="Scale 1:40000000",
-                ),
+                map_info=self.sub_map_info,
             )
 
     def render_chart(self, chart: "Chart"):
@@ -200,6 +227,11 @@ class CnAreaMapTemplate(EastAsiaMapTemplate):
         主图地图绑定器。默认继承 ``EastAsiaMapTemplate`` 的预设。
     sub_map_painter : MapPainter or None
         南海子图地图绑定器。默认继承 ``EastAsiaMapTemplate`` 的预设。
+    main_map_info : MapInfo or None
+        主图地图信息标注。默认继承 ``EastAsiaMapTemplate`` 的默认值
+        （CEMC 业务约定，含审图号）。
+    sub_map_info : MapInfo or None
+        南海子图地图信息标注。默认继承 ``EastAsiaMapTemplate`` 的默认值。
     """
     def __init__(
             self,
@@ -209,6 +241,8 @@ class CnAreaMapTemplate(EastAsiaMapTemplate):
             axes_component_painter: Optional[AxesComponentPainter] = None,
             main_map_painter: Optional[MapPainter] = None,
             sub_map_painter: Optional[MapPainter] = None,
+            main_map_info: Optional[MapInfo] = None,
+            sub_map_info: Optional[MapInfo] = None,
     ):
         if layout_config is None:
             layout_config = LayoutConfig.cn_area()
@@ -220,4 +254,6 @@ class CnAreaMapTemplate(EastAsiaMapTemplate):
             axes_component_painter=axes_component_painter,
             main_map_painter=main_map_painter,
             sub_map_painter=sub_map_painter,
+            main_map_info=main_map_info,
+            sub_map_info=sub_map_info,
         )

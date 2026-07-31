@@ -28,8 +28,6 @@ dependencies = [
     "matplotlib",
     "cartopy>=0.23.0",
     "xarray",
-    "reki",
-    "cedarkit-comp",
 ]
 
 [project.urls]
@@ -62,7 +60,3 @@ version_file = "cedarkit/plots/_version.py"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-
-[tool.uv.sources]
-reki = { path = "../reki", editable = true }
-cedarkit-comp = { path = "../cedarkit-comp", editable = true }
