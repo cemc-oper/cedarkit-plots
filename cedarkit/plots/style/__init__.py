@@ -82,3 +82,17 @@ class BarbStyle(Style):
                     f"BarbStyle.barb_increments must contain keys {required_keys}, "
                     f"missing: {missing}"
                 )
+
+
+from .registry import (  # noqa: E402
+    StyleRegistry,
+    build_style,
+    evaluate_levels,
+    get_default_registry,
+    get_rgb_table,
+    metadata_from_field,
+    register_rgb_table,
+    resolve_style,
+)
+from .schema import StyleFile, StyleFileError, load_style_file  # noqa: E402
+from .units import get_unit_transform  # noqa: E402

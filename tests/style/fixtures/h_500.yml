@@ -1,0 +1,21 @@
+id: h_500
+criteria:
+  - cemc_name: h
+    first_level_type: 100
+    first_level: 500
+  - eccodes_name: gh
+    first_level_type: 100
+    first_level: 500
+optimal: cn_dagpm
+
+styles:
+  cn_dagpm:
+    type: contour
+    levels: { linspace: [500, 588, 23] }
+    colormap: { rgb_table: cn_hgt20, index: 14 }
+    label: { inline: true, fontsize: 7, fmt: "{:.0f}", color_index: 15 }
+    highlight:
+      level: 588
+      linewidth: 1.4
+      color_index: 1
+    units: dagpm

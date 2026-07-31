@@ -79,7 +79,12 @@ class Panel:
         self.charts.append(chart)
         return chart
 
-    def plot(self, data: Union[xr.DataArray, Iterable], style: Style, layer: Optional[List[Any]] = None) -> List[Any]:
+    def plot(
+            self,
+            data: Union[xr.DataArray, Iterable],
+            style: Union[Style, str, None] = None,
+            layer: Optional[List[Any]] = None,
+    ) -> List[Any]:
         """
         Plot data in charts.
 
@@ -88,7 +93,11 @@ class Panel:
         data
             iterable data, each ``Chart`` use one data to plot.
         style
-            plot style, ``Layer`` use style to determine which plot method to use.
+            plot style: a ``Style`` object, or a style spec string resolved
+            through the style registry — ``"auto"`` (or ``None``) matches the
+            data metadata and builds the optimal variant, ``"id"`` /
+            ``"id:variant"`` selects a style from the library explicitly.
+            ``Layer`` use style to determine which plot method to use.
         layer
             layer index list, data will only be plotted in selected layers, default is all layers in chart.
         Returns
@@ -96,10 +105,14 @@ class Panel:
         List
             graphs list for each chart.
         """
+        from cedarkit.plots.style import resolve_style
+
         graphs = []
 
         if isinstance(data, xr.DataArray):
             data = [data]
+
+        style = resolve_style(style, data)
 
         for i, d in enumerate(data):
             graph = self.charts[i].plot(data=d, style=style, layer=layer)

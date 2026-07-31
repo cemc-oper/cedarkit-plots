@@ -1,1 +1,2 @@
 recursive-include cedarkit/plots/resources *
+recursive-include cedarkit/plots/style/builtin *.yml *.yaml

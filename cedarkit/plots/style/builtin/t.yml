@@ -1,0 +1,16 @@
+# Generic temperature example style shipped with cedarkit-plots.
+# Levels are generated from the data range (step form); the colormap is a
+# plain matplotlib colormap name. Business style libraries (e.g. cedar-graph)
+# override this when more specific criteria match.
+id: t
+criteria:
+  - cemc_name: t
+  - eccodes_name: t
+optimal: default
+
+styles:
+  default:
+    type: contour
+    colormap: coolwarm
+    levels: { step: 4.0, reference: 0.0 }
+    fill: true

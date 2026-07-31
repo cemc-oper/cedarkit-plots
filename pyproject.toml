@@ -28,6 +28,8 @@ dependencies = [
     "matplotlib",
     "cartopy>=0.23.0",
     "xarray",
+    "pydantic>=2",
+    "PyYAML",
 ]
 
 [project.urls]

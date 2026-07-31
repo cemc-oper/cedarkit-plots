@@ -1,0 +1,29 @@
+id: t2m
+criteria:
+  - cemc_name: t2m
+  - eccodes_name: 2t
+  - eccodes_name: t
+    first_level_type: 103
+    first_level: 2
+optimal: cn_summer
+
+styles:
+  cn_summer:
+    type: contour
+    colormap:
+      ncl: BlAqGrYeOrReVi200
+      index: [2, 18, 34, 50, 66, 82, 110, 120, 130, 140, 150, 160, 170, 180, 190, 200]
+      index_offset: -2
+    levels: [-12, -8, -4, 0, 4, 8, 12, 16, 20, 24, 28, 32, 36, 40, 44]
+    fill: true
+    units: celsius
+
+  cn_winter:
+    type: contour
+    colormap:
+      ncl: BlAqGrYeOrReVi200
+      index: [2, 12, 22, 32, 42, 52, 62, 72, 82, 92, 102, 112, 122, 132, 142, 152]
+      index_offset: -2
+    levels: [-24, -20, -16, -12, -8, -4, 0, 4, 8, 12, 16, 20, 24, 28, 32]
+    fill: true
+    units: celsius

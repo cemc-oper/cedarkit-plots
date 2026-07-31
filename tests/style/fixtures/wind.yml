@@ -1,0 +1,14 @@
+id: wind
+criteria:
+  - cemc_name: u
+  - cemc_name: v
+  - eccodes_name: u
+  - eccodes_name: v
+optimal: cn
+
+styles:
+  cn:
+    type: barb
+    barbcolor: black
+    flagcolor: black
+    linewidth: 0.3
