@@ -30,8 +30,8 @@ dependencies = [
     "xarray",
     "pydantic>=2",
     "PyYAML",
-    "reki>=2024.4.0",
-    "cedarkit-comp>=2024.4.0",
+    "reki>=2026.8.0",
+    "cedarkit-comp>=2025.7.0",
 ]
 
 [project.urls]
