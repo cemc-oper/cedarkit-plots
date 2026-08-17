@@ -76,6 +76,7 @@ getting_started/concepts
 
 tutorials/synthetic_data
 tutorials/styles
+tutorials/style_library
 tutorials/colormap
 tutorials/templates
 ```

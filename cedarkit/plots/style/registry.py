@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, Union
 
 import numpy as np
+import matplotlib
 import matplotlib.colors as mcolors
 import xarray as xr
 
@@ -332,6 +333,12 @@ def build_style(
     if variant.colormap is not None:
         source = _resolve_color_source(variant.colormap, name=style_name)
         colors = source.colors
+    if variant.fill and isinstance(colors, str):
+        # bare-string colormap (matplotlib name): resolve to a colormap
+        # object so fill colorbars can read ``.N`` — line contours keep
+        # the string as a per-line color name. Raises on unknown names.
+        colors = matplotlib.colormaps[colors]
+
 
     if highlights and any(h.color is not None or h.color_index is not None for h in highlights):
         if levels is None:

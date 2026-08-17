@@ -168,6 +168,50 @@ class TestGetStyleBarb:
         assert style.linewidth == 0.3
 
 
+class TestBareStringColormap:
+    """Bare-string colormap (matplotlib name): fill resolves to a colormap
+    object (colorbar path needs ``.N``); line contour keeps the string."""
+
+    def test_fill_resolves_to_colormap(self):
+        from cedarkit.plots.style.registry import build_style
+        from cedarkit.plots.style.schema import StyleVariant
+
+        variant = StyleVariant(
+            type="contour",
+            colormap="coolwarm",
+            levels=[0, 4, 8, 12],
+            fill=True,
+        )
+        style = build_style("t", "default", variant)
+        assert isinstance(style.colors, mcolors.Colormap)
+        assert style.colors.name == "coolwarm"
+
+    def test_line_keeps_string(self):
+        from cedarkit.plots.style.registry import build_style
+        from cedarkit.plots.style.schema import StyleVariant
+
+        variant = StyleVariant(
+            type="contour",
+            colormap="blue",
+            levels=[0, 4, 8, 12],
+        )
+        style = build_style("t", "line", variant)
+        assert style.colors == "blue"
+
+    def test_unknown_name_raises(self):
+        from cedarkit.plots.style.registry import build_style
+        from cedarkit.plots.style.schema import StyleVariant
+
+        variant = StyleVariant(
+            type="contour",
+            colormap="no_such_colormap",
+            levels=[0, 4, 8, 12],
+            fill=True,
+        )
+        with pytest.raises(KeyError):
+            build_style("t", "default", variant)
+
+
 class TestMatch:
     def test_match_by_cemc_name(self, registry):
         assert registry.match({"cemc_name": "t2m"}) == "t2m"
