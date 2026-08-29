@@ -238,6 +238,8 @@ class StyleVariant(StrictModel):
 
     # unit conversion applied to the data (built-in table in style/units.py)
     units: Optional[str] = None
+    # v2 data values are already converted; styles only state their contract.
+    expected_units: Optional[str] = None
 
     @field_validator("units")
     @classmethod

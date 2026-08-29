@@ -19,6 +19,7 @@ from ..recipe import LoadedRecipe, RecipeV2
 from .issues import PlanIssue, RecipeCompileError
 from .nodes import PlanNode, RequestKey, TimeBinding
 from .plan import PlotPlan
+from .units import conversion
 
 _PLACEHOLDER = re.compile(r"\{(params|metadata)\.([A-Za-z][A-Za-z0-9_-]*)\}")
 
@@ -143,8 +144,12 @@ class _Compiler:
         except Exception as exc:
             raise RecipeCompileError(f"cannot resolve field {field.parameter!r}: {exc}", origin=self.origin, code="field_query") from exc
 
-    def _read(self, query: FieldQuery, binding: str, origin: str) -> str:
-        key = RequestKey(self.context.provider_slot, query, TimeBinding(_time(self.context.start_time), _time(self.context.forecast_time)), self.context.cardinality)  # type: ignore[arg-type]
+    def _source_unit(self, field: Any) -> str | None:
+        """Canonical unit comes from the parameter registry, never a style."""
+        return resolve_parameter(field.parameter).record.unit
+
+    def _read(self, query: FieldQuery, binding: str, origin: str, *, time_binding: TimeBinding | None = None) -> str:
+        key = RequestKey(self.context.provider_slot, query, time_binding or TimeBinding(_time(self.context.start_time), _time(self.context.forecast_time)), self.context.cardinality)  # type: ignore[arg-type]
         rendered = json.dumps({"slot": key.provider_slot, "cardinality": key.cardinality, "time": key.time_binding.__dict__,
                                "query": _scalar({"parameter": query.parameter, "level_type": query.level_type, "level": query.level, "step_type": query.step_type, "time_range": query.time_range, "member": query.member, "extra": query.extra})}, sort_keys=True, default=str)
         if rendered in self._reads:
@@ -218,10 +223,60 @@ class _Compiler:
         for index, transform in enumerate(entry.transforms):
             descriptor = self._descriptor(transform.op, "transform", 1, f"{path}.transforms.{index}")
             for _ in range(transform.repeat):
-                current = self._node("transform", (current,), f"{path}.transforms.{index}", (name,), args=tuple(_freeze(self.expand(transform.args, where=path))), kwargs=tuple(sorted((key, _freeze(value)) for key, value in self.expand(transform.kwargs, where=path).items())), descriptor=descriptor.name, output_count=1, pure=descriptor.pure, reusable=descriptor.reusable).id
+                args = tuple(_freeze(self.expand(transform.args, where=path)))
+                if descriptor.planner:
+                    call = _PlannerCall(current, args, tuple(sorted((key, _freeze(value)) for key, value in self.expand(transform.kwargs, where=path).items())), path + f".transforms.{index}")
+                    try:
+                        current = descriptor.planner(self, call, self.context)
+                    except RecipeCompileError:
+                        raise
+                    except Exception as exc:
+                        raise RecipeCompileError(f"planner for {descriptor.name!r} failed: {exc}", origin=self.origin, code="planner") from exc
+                else:
+                    current = self._node("transform", (current,), f"{path}.transforms.{index}", (name,), args=args, kwargs=tuple(sorted((key, _freeze(value)) for key, value in self.expand(transform.kwargs, where=path).items())), descriptor=descriptor.name, output_count=1, pure=descriptor.pure, reusable=descriptor.reusable).id
             self.bindings[name] = current
+        if entry.units:
+            source = self._source_unit(entry.field) if entry.field else None
+            if source is None:
+                raise RecipeCompileError(f"data {name!r} declares units but has no known source unit", origin=self.origin, code="units")
+            try:
+                scale, offset, target = conversion(source, entry.units)
+            except ValueError as exc:
+                raise RecipeCompileError(str(exc), origin=self.origin, code="units") from exc
+            if (scale, offset) != (1, 0):
+                current = self._node("convert_units", (current,), path + ".units", (name,), args=(scale, offset), kwargs=(("units", target),)).id
+                self.bindings[name] = current
         self._building.pop(); self._built.add(name)
         return current
+
+    def time_difference(self, call: Any, interval: Any, context: CompileContext) -> str:
+        interval = pd.Timedelta(interval)
+        if interval <= pd.Timedelta(0):
+            raise RecipeCompileError("time_diff interval must be positive", origin=self.origin, code="planner")
+        if context.forecast_time is None:
+            raise RecipeCompileError("time_diff requires forecast_time", origin=self.origin, code="planner")
+        forecast = pd.Timestamp(context.forecast_time)
+        if context.start_time is not None and forecast - pd.Timestamp(context.start_time) < interval:
+            raise RecipeCompileError("forecast_time is smaller than time_diff interval", origin=self.origin, code="planner")
+        # The planner is deliberately restricted to graph data.  It derives a
+        # second request from the input's concrete read; it cannot access a provider.
+        source = self._read_ancestor(call.input_id)
+        if source is None or source.request is None:
+            raise RecipeCompileError("time_diff input has no field read ancestor", origin=self.origin, code="planner")
+        earlier_time = _time(forecast - interval)
+        key = RequestKey(source.request.provider_slot, source.request.query,
+                         TimeBinding(source.request.time_binding.start_time, earlier_time), source.request.cardinality)
+        previous = self._read(key.query, f"{source.bindings[0]}@-{interval}", call.origin + ".planner", time_binding=key.time_binding)
+        return self._node("transform", (call.input_id, previous), call.origin + ".planner", (), args=(), kwargs=(), descriptor="time_diff", output_count=1, pure=True, reusable=True).id
+
+    def _read_ancestor(self, node_id: str) -> PlanNode | None:
+        node = next((item for item in self.nodes if item.id == node_id), None)
+        if node is None: return None
+        if node.kind == "read": return node
+        for dep in node.dependencies:
+            found = self._read_ancestor(dep)
+            if found: return found
+        return None
 
     def _reference(self, name: str, path: str) -> str:
         owner = self._aliases.get(name)
@@ -289,3 +344,11 @@ def compile_recipe(recipe: RecipeV2 | LoadedRecipe, context: CompileContext, *, 
     if isinstance(recipe, LoadedRecipe):
         origin = origin or recipe.origin; recipe = recipe.recipe
     return _Compiler(recipe, context, registry or OpRegistry.builtins(), origin or "<memory>").compile()
+
+
+@dataclass(frozen=True)
+class _PlannerCall:
+    input_id: str
+    args: tuple[Any, ...]
+    kwargs: tuple[tuple[str, Any], ...]
+    origin: str

@@ -82,3 +82,11 @@ class PlotPlan:
 
     def to_json(self) -> str:
         return json.dumps(self.to_dict(), sort_keys=True, separators=(",", ":"))
+
+    def execute(self, provider: Any, **kwargs: Any) -> Any:
+        from .executor import execute_plan
+        return execute_plan(self, provider, **kwargs)
+
+    def check_available(self, provider: Any | None = None) -> Any:
+        from .availability import check_available
+        return check_available(self, provider)
