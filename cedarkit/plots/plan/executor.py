@@ -79,6 +79,19 @@ def execute_plan(plan: Any, provider: Any, *, registry: OpRegistry | None = None
             trace.append(NodeTrace(node.id, node.kind, "ok"))
         except Exception as exc:
             raise PlanExecutionError(node.id, "operation failed", exc) from exc
-    outputs = {name: values[node_id] for name, node_id in plan.outputs.items()}
+    nodes = {node.id: node for node in plan.nodes}
+
+    def output_value(name: str, node_id: str) -> Any:
+        """Resolve a public binding to its declared operation output slot."""
+        node = nodes[node_id]
+        value = values[node_id]
+        if node.output_count == 1 or name not in node.bindings:
+            return value
+        try:
+            return value[node.bindings.index(name)]
+        except ValueError as exc:  # Defensive: compiler owns this invariant.
+            raise PlanExecutionError(node_id, f"output {name!r} has no declared slot") from exc
+
+    outputs = {name: output_value(name, node_id) for name, node_id in plan.outputs.items()}
     layers = tuple({**layer, "value": outputs.get(layer.get("field"))} for layer in plan.layers)
     return PlanResult.create(values, outputs, layers, tuple(trace))

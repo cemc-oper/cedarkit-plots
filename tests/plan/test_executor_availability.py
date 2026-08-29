@@ -4,6 +4,7 @@ import pytest
 import pandas as pd
 import xarray as xr
 
+from cedarkit.plots.ops import OpRegistry
 from cedarkit.plots.plan import CompileContext, PlanExecutionError, compile_recipe
 from cedarkit.plots.recipe import load_recipe
 
@@ -30,6 +31,39 @@ def test_time_diff_planner_makes_previous_request_visible_and_executes_in_one_ba
     result = plan.execute(provider)
     assert len(provider.calls) == 2  # different time bindings form separate batch groups
     assert result.outputs["result"] == pd.Timedelta("24h")
+
+
+def test_equivalent_reads_are_deduplicated_for_execution_and_fallback_fetch():
+    loaded = _recipe({
+        "result": {"field": {"parameter": "cedarkit.t2m"}},
+        "same": {"field": {"parameter": "cedarkit.t2m"}},
+    })
+    plan = compile_recipe(loaded, CompileContext())
+
+    class FetchOnlyProvider:
+        def __init__(self): self.calls = []
+        def fetch(self, request):
+            self.calls.append(request)
+            return "value"
+
+    provider = FetchOnlyProvider()
+    result = plan.execute(provider)
+    assert len(provider.calls) == 1
+    assert result.outputs["result"] == result.outputs["same"] == "value"
+
+
+def test_dead_subtree_never_reaches_provider_or_executor():
+    loaded = _recipe({
+        "result": {"field": {"parameter": "cedarkit.t2m"}},
+        "dead": {"field": {"parameter": "cedarkit.rain"}, "transforms": [{"op": "smth9"}]},
+    })
+    plan = compile_recipe(loaded, CompileContext())
+    provider = Provider()
+    result = plan.execute(provider)
+    assert len(provider.calls) == 1
+    assert len(provider.calls[0]) == 1
+    assert "dead" not in result.outputs
+    assert all(trace.kind != "transform" for trace in result.trace)
 
 
 def test_availability_checks_each_deduplicated_read_once_and_reports_consumers():
@@ -59,3 +93,22 @@ def test_declared_data_units_become_an_explicit_conversion_node():
     value = plan.execute(KelvinProvider()).outputs["result"]
     assert value.values.tolist() == [0.0]
     assert value.attrs == {"units": "degC", "long_name": "temperature"}
+
+
+def test_multi_output_compute_binds_each_declared_output_slot():
+    loaded = _recipe({
+        "source": {"field": {"parameter": "cedarkit.rain"}},
+        "classification": {
+            "compute": {
+                "op": "classify", "inputs": ["source"],
+                "outputs": ["result", "snow", "mixed"],
+            },
+        },
+    })
+    registry = OpRegistry.builtins()
+    registry.register("classify", lambda _source: ("rain", "snow", "mixed"), kind="compute", output_count=3)
+    plan = compile_recipe(loaded, CompileContext(), registry=registry)
+    result = plan.execute(Provider(), registry=registry)
+    assert result.outputs["result"] == "rain"
+    assert result.outputs["snow"] == "snow"
+    assert result.outputs["mixed"] == "mixed"
