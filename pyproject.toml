@@ -38,6 +38,9 @@ dependencies = [
 Homepage = "https://github.com/cemc-oper/cedarkit-plots"
 Repository = "https://github.com/cemc-oper/cedarkit-plots.git"
 
+[project.scripts]
+cedarkit-plots = "cedarkit.plots.cli:main"
+
 [project.optional-dependencies]
 test = ["pytest", "scipy"]
 cov = ["pytest-cov"]
