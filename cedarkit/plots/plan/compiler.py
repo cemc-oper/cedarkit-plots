@@ -37,7 +37,7 @@ def _time(value: Any) -> str | None:
         return None
     # Forecast bindings are commonly durations (``48h``), whereas start
     # bindings are timestamps.  Keep both source-neutral and serializable.
-    if isinstance(value, pd.Timedelta) or (isinstance(value, str) and re.fullmatch(r"[+-]?\\d+(?:\\.\\d+)?[A-Za-z]+", value)):
+    if isinstance(value, pd.Timedelta) or (isinstance(value, str) and re.fullmatch(r"[+-]?\d+(?:\.\d+)?[A-Za-z]+", value)):
         return pd.Timedelta(value).isoformat()
     stamp = pd.Timestamp(value)
     if stamp.tzinfo is None:
@@ -260,7 +260,7 @@ class _Compiler:
         if context.forecast_time is None:
             raise RecipeCompileError("time_diff requires forecast_time", origin=self.origin, code="planner")
         raw_forecast = context.forecast_time
-        duration_binding = isinstance(raw_forecast, pd.Timedelta) or (isinstance(raw_forecast, str) and re.fullmatch(r"[+-]?\\d+(?:\\.\\d+)?[A-Za-z]+", raw_forecast))
+        duration_binding = isinstance(raw_forecast, pd.Timedelta) or (isinstance(raw_forecast, str) and re.fullmatch(r"[+-]?\d+(?:\.\d+)?[A-Za-z]+", raw_forecast))
         forecast = pd.Timedelta(raw_forecast) if duration_binding else pd.Timestamp(raw_forecast)
         if duration_binding:
             if forecast < interval:

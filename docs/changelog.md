@@ -10,6 +10,9 @@ mystnb:
 
 ## 待发布
 
+- 新增版本化 Recipe v2、不可变 PlotPlan、静态 `recipe plan` 预览和
+  plugin/availability public API。v1 reader 与 `PlotModuleAdapter` 保持兼容；
+  新 recipe 应使用 v2 与显式 data units，未来弃用会先在本记录公告。
 - 新增 ReadTheDocs 文档站点（Sphinx + sphinx-book-theme）。
 - 新增公开模块 {mod}`cedarkit.plots.testing`，与集成测试套件
   共用合成数据生成函数与预设样式。
