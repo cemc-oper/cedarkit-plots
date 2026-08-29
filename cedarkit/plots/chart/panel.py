@@ -61,7 +61,7 @@ class Panel:
         plt.show()
 
     def save(self, *args, bbox_inches="tight", **kwargs):
-        return plt.savefig(*args, bbox_inches=bbox_inches, **kwargs)
+        return self.fig.savefig(*args, bbox_inches=bbox_inches, **kwargs)
 
     def add_chart(self, domain: XYTemplate) -> Chart:
         """
