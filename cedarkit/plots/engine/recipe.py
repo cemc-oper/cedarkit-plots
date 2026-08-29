@@ -274,6 +274,57 @@ def load_recipe_file(path: Union[str, Path]) -> Recipe:
         raise RecipeError(path, "recipe file must contain a YAML mapping")
 
     try:
+        if raw.get("api_version") == "cedarkit.plots/v2":
+            # Keep the published v1 PlotModuleAdapter usable while v2 recipes
+            # migrate to the compiler/executor path.  This is deliberately an
+            # adapter, not a second v2 parser: validation is owned by the
+            # versioned recipe loader.
+            from ..recipe import load_recipe
+            from reki import resolve_parameter
+
+            recipe = load_recipe(raw, origin=str(path)).recipe
+            spec = recipe.spec.model_dump(mode="python", exclude_none=True)
+            def legacy_templates(value):
+                if isinstance(value, str):
+                    return value.replace("{params.", "{")
+                if isinstance(value, list):
+                    return [legacy_templates(item) for item in value]
+                if isinstance(value, dict):
+                    return {key: legacy_templates(item) for key, item in value.items()}
+                return value
+            spec = legacy_templates(spec)
+            for entry in spec["data"].values():
+                entry.pop("legacy_unit_compatibility", None)
+                if entry.get("compute"):
+                    entry["compute"].pop("repeat", None)
+                if "field" not in entry:
+                    continue
+                field = entry.pop("field")
+                entry["field"] = field["parameter"]
+                if field.get("level"):
+                    entry["level"] = field["level"]
+                entry.pop("units", None)
+                source = resolve_parameter(field["parameter"]).record.unit
+                target = recipe.spec.data[next(key for key, value in spec["data"].items() if value is entry)].units
+                # Preserve legacy rendering values until callers move to
+                # PlotPlan execution.  v2 itself never derives this from a
+                # style; its compiler inserts an explicit conversion node.
+                conversion = {("K", "degC"): ("unit_offset", [-273.15]),
+                              ("Gpm", "dagpm"): ("unit_scale", [0.1]),
+                              ("Pa", "hPa"): ("unit_scale", [0.01]),
+                              ("m", "mm"): ("unit_scale", [1000])}.get((source, target))
+                if conversion:
+                    entry.setdefault("transforms", []).append({"op": conversion[0], "args": conversion[1]})
+            for layer in spec["layers"]:
+                if isinstance(layer.get("style"), dict) and "by" in layer["style"]:
+                    layer["style"] = {"select": layer["style"]}
+            # The old adapter is sequential.  Keep its compatibility view in
+            # dependency order; v2 execution itself uses the compiled DAG.
+            spec["data"] = {
+                **{key: value for key, value in spec["data"].items() if "field" in value},
+                **{key: value for key, value in spec["data"].items() if "compute" in value},
+            }
+            raw = {"name": recipe.metadata.title or recipe.metadata.name, **spec}
         return Recipe.model_validate(raw)
     except ValueError as e:
         raise RecipeError(path, f"recipe validation failed: {e}") from e

@@ -35,6 +35,10 @@ def _freeze(value: Any) -> Any:
 def _time(value: Any) -> str | None:
     if value is None:
         return None
+    # Forecast bindings are commonly durations (``48h``), whereas start
+    # bindings are timestamps.  Keep both source-neutral and serializable.
+    if isinstance(value, pd.Timedelta) or (isinstance(value, str) and re.fullmatch(r"[+-]?\\d+(?:\\.\\d+)?[A-Za-z]+", value)):
+        return pd.Timedelta(value).isoformat()
     stamp = pd.Timestamp(value)
     if stamp.tzinfo is None:
         stamp = stamp.tz_localize("UTC")
@@ -255,8 +259,13 @@ class _Compiler:
             raise RecipeCompileError("time_diff interval must be positive", origin=self.origin, code="planner")
         if context.forecast_time is None:
             raise RecipeCompileError("time_diff requires forecast_time", origin=self.origin, code="planner")
-        forecast = pd.Timestamp(context.forecast_time)
-        if context.start_time is not None and forecast - pd.Timestamp(context.start_time) < interval:
+        raw_forecast = context.forecast_time
+        duration_binding = isinstance(raw_forecast, pd.Timedelta) or (isinstance(raw_forecast, str) and re.fullmatch(r"[+-]?\\d+(?:\\.\\d+)?[A-Za-z]+", raw_forecast))
+        forecast = pd.Timedelta(raw_forecast) if duration_binding else pd.Timestamp(raw_forecast)
+        if duration_binding:
+            if forecast < interval:
+                raise RecipeCompileError("forecast_time is smaller than time_diff interval", origin=self.origin, code="planner")
+        elif context.start_time is not None and forecast - pd.Timestamp(context.start_time) < interval:
             raise RecipeCompileError("forecast_time is smaller than time_diff interval", origin=self.origin, code="planner")
         # The planner is deliberately restricted to graph data.  It derives a
         # second request from the input's concrete read; it cannot access a provider.
