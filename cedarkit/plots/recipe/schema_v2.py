@@ -167,13 +167,20 @@ class RecipeSpecV2(StrictModel):
     def references(self) -> "RecipeSpecV2":
         if not self.data or not self.layers:
             raise ValueError("data and layers must not be empty")
+        # Collect every declared output before checking inputs.  Compute
+        # declarations are intentionally allowed before their dependencies.
         names = set(self.data)
+        for entry in self.data.values():
+            if entry.compute:
+                for output in entry.compute.outputs or []:
+                    if output in names:
+                        raise ValueError(f"compute output duplicates data entry {output!r}")
+                    names.add(output)
         for entry in self.data.values():
             if entry.compute:
                 for key in entry.compute.inputs:
                     if key not in names:
                         raise ValueError(f"compute references unknown input {key!r}")
-                names.update(entry.compute.outputs or [])
         for layer in self.layers:
             refs = [layer.field] if layer.field else [layer.vector.u, layer.vector.v]  # type: ignore[union-attr]
             if any(ref not in names for ref in refs):
