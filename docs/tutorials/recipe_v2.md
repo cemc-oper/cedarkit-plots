@@ -77,6 +77,21 @@ outputs、layers、issues 与 executable node IDs。它不含 callable、provide
 没有 provider/read 能力。`plan.check_available(provider)` 仅分析请求，返回
 按 RequestKey 列出的 `AvailabilityReport`/`RequestAvailability`，而不是取数。
 
+## Source neutrality and CMADaaS availability
+
+`PlotPlan` deliberately does not bind a dataset, source, external element code,
+or service configuration. `RequestKey.parameter_id` is the stable scientific
+identity; its `FieldQuery` carries level and time conditions. A provider may
+resolve those values to a local GRIB selection or to a CMADaaS request only at
+execution time.
+
+Availability is capability-dependent. A provider that has a metadata-only
+interface may report `available` or `missing`. A CMADaaS direct-result provider
+cannot make that determination without fetching and decoding a grid, so it
+returns `unknown`. Callers must not treat `unknown` as either a successful data
+load or a missing optional field. Authentication, endpoints, catalog data codes
+and provider traces remain outside the plan snapshot.
+
 ## Op 与插件作者指南
 
 用 `OpDescriptor(name, kind, input_count, output_count, callable, ...)` 发布 op。
