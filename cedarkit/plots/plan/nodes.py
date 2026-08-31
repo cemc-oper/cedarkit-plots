@@ -19,6 +19,7 @@ class TimeBinding:
 class RequestKey:
     """The complete identity of a provider request within one plan."""
     provider_slot: str
+    parameter_id: str
     query: FieldQuery
     time_binding: TimeBinding
     cardinality: Literal["one", "first", "all"] = "one"
@@ -38,4 +39,3 @@ class PlanNode:
     pure: bool = True
     reusable: bool = True
     request: RequestKey | None = None
-

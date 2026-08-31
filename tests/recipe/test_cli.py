@@ -31,6 +31,6 @@ def test_plan_previews_duration_context_as_versioned_json(tmp_path, capsys):
     assert main(["recipe", "plan", str(recipe), "--start-time", "2024-07-01T00:00Z",
                  "--forecast-time", "24h", "--format", "json"]) == 0
     result = json.loads(capsys.readouterr().out)
-    assert result["plan_schema_version"] == 1
+    assert result["plan_schema_version"] == 2
     assert result["context"]["forecast_time"] == "P1DT0H0M0S"
     assert [node["kind"] for node in result["nodes"]] == ["read", "convert_units"]

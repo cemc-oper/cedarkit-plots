@@ -152,9 +152,9 @@ class _Compiler:
         """Canonical unit comes from the parameter registry, never a style."""
         return resolve_parameter(field.parameter).record.unit
 
-    def _read(self, query: FieldQuery, binding: str, origin: str, *, time_binding: TimeBinding | None = None) -> str:
-        key = RequestKey(self.context.provider_slot, query, time_binding or TimeBinding(_time(self.context.start_time), _time(self.context.forecast_time)), self.context.cardinality)  # type: ignore[arg-type]
-        rendered = json.dumps({"slot": key.provider_slot, "cardinality": key.cardinality, "time": key.time_binding.__dict__,
+    def _read(self, query: FieldQuery, parameter_id: str, binding: str, origin: str, *, time_binding: TimeBinding | None = None) -> str:
+        key = RequestKey(self.context.provider_slot, parameter_id, query, time_binding or TimeBinding(_time(self.context.start_time), _time(self.context.forecast_time)), self.context.cardinality)  # type: ignore[arg-type]
+        rendered = json.dumps({"slot": key.provider_slot, "parameter_id": key.parameter_id, "cardinality": key.cardinality, "time": key.time_binding.__dict__,
                                "query": _scalar({"parameter": query.parameter, "level_type": query.level_type, "level": query.level, "step_type": query.step_type, "time_range": query.time_range, "member": query.member, "extra": query.extra})}, sort_keys=True, default=str)
         if rendered in self._reads:
             node_id = self._reads[rendered]
@@ -213,7 +213,11 @@ class _Compiler:
         self._building.append(name)
         entry = self.recipe.spec.data[name]; path = f"spec.data.{name}"
         if entry.field:
-            current = self._read(self._query(entry.field, path), name, path + ".field")
+            query = self._query(entry.field, path)
+            parameter_id = resolve_parameter(entry.field.parameter).record.parameter_id
+            if parameter_id is None:
+                raise RecipeCompileError(f"field {entry.field.parameter!r} has no stable parameter ID", origin=path, code="parameter_id")
+            current = self._read(query, parameter_id, name, path + ".field")
         else:
             assert entry.compute
             descriptor = self._descriptor(entry.compute.op, "compute", len(entry.compute.inputs), path + ".compute")
@@ -273,9 +277,9 @@ class _Compiler:
         if source is None or source.request is None:
             raise RecipeCompileError("time_diff input has no field read ancestor", origin=self.origin, code="planner")
         earlier_time = _time(forecast - interval)
-        key = RequestKey(source.request.provider_slot, source.request.query,
+        key = RequestKey(source.request.provider_slot, source.request.parameter_id, source.request.query,
                          TimeBinding(source.request.time_binding.start_time, earlier_time), source.request.cardinality)
-        previous = self._read(key.query, f"{source.bindings[0]}@-{interval}", call.origin + ".planner", time_binding=key.time_binding)
+        previous = self._read(key.query, key.parameter_id, f"{source.bindings[0]}@-{interval}", call.origin + ".planner", time_binding=key.time_binding)
         return self._node("transform", (call.input_id, previous), call.origin + ".planner", (), args=(), kwargs=(), descriptor="time_diff", output_count=1, pure=True, reusable=True).id
 
     def _read_ancestor(self, node_id: str) -> PlanNode | None:

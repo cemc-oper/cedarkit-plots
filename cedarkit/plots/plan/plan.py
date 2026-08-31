@@ -22,7 +22,7 @@ def _json_value(value: Any) -> Any:
 
 def _request_dict(key: RequestKey) -> dict[str, Any]:
     query = key.query
-    return {"provider_slot": key.provider_slot, "cardinality": key.cardinality,
+    return {"provider_slot": key.provider_slot, "parameter_id": key.parameter_id, "cardinality": key.cardinality,
             "time_binding": _json_value(key.time_binding.__dict__),
             "query": _json_value({"parameter": query.parameter, "level_type": query.level_type,
                                   "level": query.level, "step_type": query.step_type,
@@ -73,7 +73,7 @@ class PlotPlan:
             if node.request:
                 item["request"] = _request_dict(node.request)
             nodes.append(item)
-        return {"plan_schema_version": 1, "recipe": {"identity": self.recipe_identity,
+        return {"plan_schema_version": 2, "recipe": {"identity": self.recipe_identity,
                 "api_version": self.recipe_version}, "compiler_version": self.compiler_version,
                 "descriptor_identity": self.descriptor_identity, "context": _json_value(self.context),
                 "nodes": nodes, "outputs": dict(sorted(self.outputs.items())), "layers": [_json_value(x) for x in self.layers],

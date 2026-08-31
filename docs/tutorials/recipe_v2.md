@@ -58,7 +58,7 @@ changelog 中给出，不会把 v1 模块悄然改为 v2 的语义。
 ## 编译、预览与执行边界
 
 `compile_recipe` 只构建不可变 `PlotPlan`，不接触 provider、不读取字段。
-`RequestKey` 包含 provider slot、完整 `FieldQuery`、时间绑定与 cardinality，
+`RequestKey` 包含 provider slot、稳定的 `parameter_id`、完整 `FieldQuery`、时间绑定与 cardinality，
 因此只有完全等价的请求才会合并。未被图层消费的节点会作为 `dead_node`
 诊断并从可执行节点中裁剪；`CompileContext(strict=True)` 会把它变成错误。
 unknown ref、循环、重复输出、未知 op、输入/输出数量或单位不匹配都在编译期
