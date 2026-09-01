@@ -49,8 +49,20 @@ def load_recipe(source: str | Path | dict[str, Any], *, origin: str | None = Non
     if isinstance(source, dict):
         raw, source_origin = source, origin or "<memory>"
     else:
+        source_text = str(source)
         path = Path(source)
-        if path.exists():
+        # Multiline strings are recipe documents, not file names.  Besides
+        # avoiding an unnecessary filesystem lookup, this prevents Python
+        # 3.11 from raising ENAMETOOLONG while checking YAML text as a path.
+        try:
+            is_path = (
+                "\n" not in source_text
+                and "\r" not in source_text
+                and path.exists()
+            )
+        except OSError:
+            is_path = False
+        if is_path:
             source_origin = str(path)
             try:
                 raw = _parse(path.read_text(encoding="utf-8"), source_origin)
@@ -58,7 +70,7 @@ def load_recipe(source: str | Path | dict[str, Any], *, origin: str | None = Non
                 raise RecipeLoadError(f"{source_origin}: cannot read file: {exc}") from exc
         else:
             source_origin = origin or "<stdin>"
-            raw = _parse(str(source), source_origin)
+            raw = _parse(source_text, source_origin)
     has_version, has_kind = "api_version" in raw, "kind" in raw
     if has_version != has_kind:
         raise RecipeLoadError(f"{source_origin}: partial v2 envelope requires api_version and kind")
