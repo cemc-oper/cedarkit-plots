@@ -6,123 +6,123 @@
 ![GitHub License](https://img.shields.io/github/license/cemc-oper/cedarkit-plots)
 ![GitHub Action Workflow Status](https://github.com/cemc-oper/cedarkit-plots/actions/workflows/ci.yaml/badge.svg)
 
-A plotting tool for meteorology data.
+`cedarkit-plots` is a low-level meteorological plotting library built on
+Matplotlib and Cartopy. It provides map templates, panels and charts, plotting
+styles, colormaps, and plot recipes. It is the plotting engine behind
+higher-level packages such as `cedar-graph`.
 
-## Install
+> This project is at the Sandbox maturity level. Its public API and recipe
+> format may still evolve.
 
-Install using pip:
+## Features
+
+- Compose multi-panel meteorological figures with `Panel`, `Chart`, and
+  `Layer`.
+- Quickly draw East Asia, Europe-Asia, global, North Polar, and ensemble
+  forecast products with built-in map templates.
+- Define contours, fills, wind barbs, and colorbars with reusable style
+  libraries.
+- Use bundled NCL colormaps and China shapefile resources.
+- Load and generate plot products from declarative YAML recipes.
+
+## Installation
+
+Install from PyPI:
 
 ```bash
 pip install cedarkit-plots
 ```
 
-Or download the latest source code from GitHub and install manually.
+For development in this workspace, install dependencies and run the tests:
 
-## Getting started
+```bash
+cd repo/cedarkit-plots
+uv sync --extra test
+pytest
+```
 
-The following example uses CMA-GFS data to draw a 2m temperature contour fill plot.
+For additional installation options, Cartopy data caching, and source-based
+development, see the [installation guide](docs/getting_started/install.md).
 
-Set some variables: 
+## Quick start
 
-```py
+This example uses synthetic data provided by the project, so it does not require
+any operational data:
+
+```python
 import pandas as pd
 
-graph_name = "2m Temperature (C)"
-system_name = "CMA-GFS"
-start_time = pd.to_datetime("2024-11-09")
-forecast_time = pd.to_timedelta("24h")
-```
-
-Get local data file path using reki:
-
-```py
-from reki.data_finder import find_local_file
-
-data_file_path = find_local_file(
-    "cma_gfs_gmf/grib2/orig",
-    start_time=start_time,
-    forecast_time=forecast_time,
-)
-```
-
-Load 2m temperature field from file and convert unit:
-
-```py
-from reki.format.grib.eccodes import load_field_from_file
-
-field_t_2m = load_field_from_file(
-    data_file_path,
-    parameter="2t",
-) - 273.15
-```
-
-Create contour style, including levels and colormap.
-In this example, a NCL colormap embedded in the project is used.
-
-```py
-import numpy as np
-import matplotlib.colors as mcolors
-from cedarkit.plots.colormap import get_ncl_colormap
-from cedarkit.plots.style import ContourStyle
-
-t_2m_level = [-24, -20, -16, -12, -8, -4, 0, 4, 8, 12, 16, 20, 24, 28, 32]
-
-color_map = get_ncl_colormap("BlAqGrYeOrReVi200")
-color_index = np.array([2, 12, 22, 32, 42, 52, 62, 72, 82, 92, 102, 112, 122, 132, 142, 152]) - 2
-t_2m_color_map = mcolors.ListedColormap(color_map(color_index))
-
-t_2m_style = ContourStyle(
-    colors=t_2m_color_map,
-    levels=t_2m_level,
-    fill=True,
-)
-```
-
-Create a build-in template `EastAsiaMapTemplate`.
-A template is a pre-defined layout to put title, text info, colorbar in some position. 
-
-```py
-from cedarkit.plots.domains import EastAsiaMapTemplate
-
-domain = EastAsiaMapTemplate()
-```
-
-Create plot panel and plot the field:
-
-```py
 from cedarkit.plots.chart import Panel
+from cedarkit.plots.domains import EastAsiaMapTemplate
+from cedarkit.plots.testing import east_asia_temperature_field, temperature_style
 
-panel = Panel(domain=domain)
-panel.plot(field_t_2m, style=t_2m_style)
-```
+field = east_asia_temperature_field()
+style = temperature_style()
 
-Add title and colorbar:
-
-```py
-domain.set_title(
-    panel=panel,
-    graph_name=graph_name,
-    system_name=system_name,
-    start_time=start_time,
-    forecast_time=forecast_time,
+panel = Panel(domain=EastAsiaMapTemplate())
+panel.plot(field, style=style)
+panel.set_title(
+    graph_name="2m Temperature (°C)",
+    system_name="cedarkit-plots demo",
+    start_time=pd.Timestamp("2024-11-09 00:00:00"),
+    forecast_time=pd.Timedelta("24h"),
 )
-domain.add_colorbar(panel=panel, style=t_2m_style)
+panel.add_colorbar(style=style)
+panel.save("temperature.png")
 ```
 
-Show the picture:
+See [Quick start](docs/getting_started/quick_start.md) for a walkthrough.
 
-```py
-panel.show()
+## Documentation structure
+
+Keep the README as the project entry point. Put detailed user and maintainer
+documentation in `docs/`, organized as follows. This avoids maintaining the
+same example or API documentation in more than one place.
+
+```text
+README.md                         Project overview, installation, minimal example, documentation links
+docs/
+├── getting_started/              Everything a new user needs for their first plot
+│   ├── install.md                Installation, dependencies, and environment
+│   ├── quick_start.md            Minimal end-to-end example
+│   └── concepts.md               Panel / Chart / Layer / Style / Template concepts
+├── tutorials/                    Reusable plotting workflows, organized by task
+│   ├── synthetic_data.md         Synthetic data shared by documentation and tests
+│   ├── styles.md                 Defining and applying styles
+│   ├── style_library.md          Managing style libraries
+│   ├── colormap.md               Selecting and customizing colormaps
+│   ├── templates.md              Map templates and layout
+│   └── recipe_v2.md              YAML plot recipes
+├── gallery/                      Runnable examples, organized by final figure
+├── api/                          Code-synchronized module and object reference
+└── changelog.md                  Release history
 ```
 
-## LICENSE
+The recommended reading order is: installation → quick start → core concepts →
+relevant tutorials → gallery → API reference. When adding a feature, add a
+tutorial or gallery example first; add it to the API reference only when its
+public interface is stable and supported.
+
+## Documentation
+
+- [Installation](docs/getting_started/install.md): runtime environment and
+  source-based development.
+- [Quick start](docs/getting_started/quick_start.md): create your first figure
+  from a synthetic temperature field.
+- [Core concepts](docs/getting_started/concepts.md): responsibilities of the
+  primary objects.
+- [Tutorials](docs/tutorials/): styles, colormaps, templates, and YAML recipes.
+- [Gallery](docs/gallery/index.md): complete figures by region and product type.
+- [API reference](docs/api/index.md): generated reference for Python modules.
+- [Changelog](docs/changelog.md): release history.
+
+## License and third-party resources
 
 Copyright &copy; 2021-2026, developers at cemc-oper.
 
-`cedarkit-plots` is licensed under [Apache License V2.0](./LICENSE)
+`cedarkit-plots` is licensed under the [Apache License 2.0](LICENSE).
 
-### Third party
-
-cedarkit/plots/resources/map/china-shapefiles is from project [dongli/china-shapefiles](https://github.com/dongli/china-shapefiles).
-
-cedarkit/plots/resources/colormap/ncl is from project [NCL](https://github.com/NCAR/ncl).
+- `cedarkit/plots/resources/map/china-shapefiles` is from
+  [dongli/china-shapefiles](https://github.com/dongli/china-shapefiles).
+- `cedarkit/plots/resources/colormap/ncl` is from
+  [NCL](https://github.com/NCAR/ncl).
