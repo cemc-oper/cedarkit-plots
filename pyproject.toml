@@ -55,14 +55,17 @@ docs = [
 ]
 
 [tool.setuptools.packages.find]
-where = ["."]
+where = ["src"]
 include = ["cedarkit.plots", "cedarkit.plots.*"]
+
+[tool.setuptools.package-dir]
+"" = "src"
 
 [tool.setuptools]
 include-package-data = true
 
 [tool.setuptools_scm]
-version_file = "cedarkit/plots/_version.py"
+version_file = "src/cedarkit/plots/_version.py"
 
 [tool.uv.sources]
 cedarkit-comp = { path = "../cedarkit-comp", editable = true }
