@@ -1197,6 +1197,7 @@ def _map_chart_specs(
     chart_declarations: tuple[tuple[str, str | None], ...],
     chart_defaults: ChartSpec | _ConfigSentinel,
     chart_rules: Any,
+    chart_configs: Mapping[str, ChartSpec] | _ConfigSentinel = UNSET,
     *,
     pending: list[Issue],
 ) -> dict[str, ChartSpec]:
@@ -1206,6 +1207,13 @@ def _map_chart_specs(
     for rule in rules:
         if not isinstance(rule, ChartRule):
             _fail("chart_rules must contain ChartRule values", path=("chart_rules",))
+    if chart_configs is not UNSET:
+        if not isinstance(chart_configs, Mapping):
+            _fail("chart_configs must be a mapping", path=("chart_configs",))
+        for chart_id, spec in chart_configs.items():
+            _check_id(chart_id, "chart config id")
+            if not isinstance(spec, ChartSpec):
+                _fail("chart_configs values must be ChartSpec", path=("chart_configs", chart_id))
     matched: dict[str, list[ChartRule]] = {chart_id: [] for chart_id, _ in chart_declarations}
     for index, rule in enumerate(rules):
         matches = [chart_id for chart_id, role in chart_declarations if _selector_matches(rule.selector, chart_id, role)]
@@ -1222,6 +1230,8 @@ def _map_chart_specs(
             base = merge_config(base, chart_defaults)
         if rules_for_chart:
             base = merge_config(base, rules_for_chart[0].spec)
+        if chart_configs is not UNSET and chart_id in chart_configs:
+            base = merge_config(base, chart_configs[chart_id])
         specs[chart_id] = resolve_chart_spec(base, pending=pending, chart_id=chart_id)
     return specs
 
@@ -1232,6 +1242,7 @@ def resolve_config(
     theme: Theme | _ConfigSentinel = UNSET,
     chart_defaults: ChartSpec | _ConfigSentinel = UNSET,
     chart_rules: Sequence[ChartRule] | _ConfigSentinel = UNSET,
+    chart_configs: Mapping[str, ChartSpec] | _ConfigSentinel = UNSET,
     decorations: DecorationSpec | _ConfigSentinel = UNSET,
     charts: Any = UNSET,
     complete: bool = False,
@@ -1246,7 +1257,9 @@ def resolve_config(
     pending.extend(layout_pending)
     resolved_theme = resolve_theme(theme)
     resolved_decorations = resolve_decorations(decorations)
-    resolved_charts = _map_chart_specs(declarations, chart_defaults, chart_rules, pending=pending)
+    resolved_charts = _map_chart_specs(
+        declarations, chart_defaults, chart_rules, chart_configs, pending=pending,
+    )
     # Panel-level theme is a source above ChartSpec.theme.  Apply only fields
     # explicitly present in the user value; resolving the global defaults
     # first must not erase a narrower chart-level override.

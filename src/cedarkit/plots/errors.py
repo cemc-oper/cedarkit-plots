@@ -56,12 +56,49 @@ class ConfigError(ValueError):
         super().__init__(message)
 
 
-class ContentError(ValueError):
+class _IssueError(ValueError):
+    """Base for user-facing value errors carrying structured issues."""
+
+    def __init__(
+        self,
+        message: str | None = None,
+        *,
+        code: str = "invalid_content",
+        path: Iterable[str] = (),
+        issues: Iterable[Issue] = (),
+    ) -> None:
+        collected = tuple(issues)
+        if not collected:
+            collected = (Issue(code=code, message=message or code, path=tuple(path)),)
+        self.issues = collected
+        self.code = collected[0].code
+        self.path = collected[0].path
+        super().__init__(message or "; ".join(issue.message for issue in collected))
+
+
+class ContentError(_IssueError):
     """Raised when a logical plotting content operation is invalid."""
 
 
 class RenderError(RuntimeError):
     """Raised when a rendering operation fails after configuration succeeds."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        stage: str | None = None,
+        chart_id: str | None = None,
+        layer_id: str | None = None,
+        target_id: str | None = None,
+        cause: BaseException | None = None,
+    ) -> None:
+        self.stage = stage
+        self.chart_id = chart_id
+        self.layer_id = layer_id
+        self.target_id = target_id
+        self.cause = cause
+        super().__init__(message)
 
 
 class RenderRequiredError(RuntimeError):
