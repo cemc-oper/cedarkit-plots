@@ -577,15 +577,16 @@ def north_polar_chart(
     west_labels = [f"{value}W" for value in range(30, 180, 30)]
     labels_for_longitude = east_labels + west_labels[::-1]
     for longitude, label in zip(range(0, 360, 30), labels_for_longitude):
-        y = .06 if label == "60W" else .035
+        y = -.5 if label == "60W" else -4
         labels[f"longitude_{longitude}"] = AnnotationSpec(
             text=label,
+            crs=ccrs.Geodetic(),
             position=TextPosition(
                 space="subplot",
                 subplot="main",
-                xy=(longitude / 360, y),
+                xy=(longitude, y),
                 ha="center",
-                va="center",
+                va="bottom" if label == "60W" else "center",
             ),
             fontsize=8,
         )

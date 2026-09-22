@@ -33,8 +33,8 @@ class RecordingLoader(MapLoader):
 
 
 def field(offset: float = 0) -> xr.DataArray:
-    lon = np.linspace(100, 130, 5)
-    lat = np.linspace(20, 50, 4)
+    lon = np.linspace(60, 150, 5)
+    lat = np.linspace(0, 65, 4)
     return xr.DataArray(
         np.add.outer(lat, lon) + offset,
         dims=("lat", "lon"),

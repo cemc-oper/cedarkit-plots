@@ -377,6 +377,7 @@ class ColorbarSpec:
 @dataclass(frozen=True, kw_only=True, slots=True)
 class AnnotationSpec:
     text: str
+    crs: Any = field(default=UNSET)
     position: TextPosition | None = field(default=UNSET)
     enabled: bool = field(default=UNSET)
     fontsize: float = field(default=UNSET)
@@ -384,6 +385,12 @@ class AnnotationSpec:
     bbox: Mapping[str, Any] | None = field(default=UNSET)
 
     def __post_init__(self) -> None:
+        if _is_declared(self.crs) and self.crs is not None:
+            object.__setattr__(self, "crs", _crs(self.crs, "crs"))
+            if _is_declared(self.position) and self.position is not None and (
+                not isinstance(self.position, TextPosition) or self.position.space != "subplot"
+            ):
+                _fail("geographic annotation requires subplot-space position", path=("position",))
         if not isinstance(self.text, str):
             _fail("AnnotationSpec.text must be a string", path=("text",))
         if _is_declared(self.position) and self.position is not None and not isinstance(self.position, TextPosition):
@@ -608,6 +615,7 @@ class SubplotSpec:
 
 @dataclass(frozen=True, kw_only=True, slots=True)
 class ChartSpec:
+    _subplots_declared: bool = field(default=False, init=False, repr=False, compare=False)
     subplots: Mapping[str, SubplotSpec] = field(default=UNSET)
     theme: Theme = field(default=UNSET)
     decorations: DecorationSpec = field(default=UNSET)
@@ -1177,6 +1185,7 @@ def resolve_subplot(
     resolved_annotations = {
         key: AnnotationSpec(
             text=item.text,
+            crs=None if not _is_declared(item.crs) else item.crs,
             position=TextPosition(space="subplot", xy=(.5, .5)) if not _is_declared(item.position) or item.position is None else item.position,
             enabled=True if not _is_declared(item.enabled) else item.enabled,
             fontsize=10.0 if not _is_declared(item.fontsize) else item.fontsize,
@@ -1185,6 +1194,8 @@ def resolve_subplot(
         )
         for key, item in annotations.items()
     }
+    if kind != "map" and any(item.crs is not None for item in resolved_annotations.values()):
+        _fail("geographic annotations require a map subplot", code="subplot_kind")
     zorder = (0.0 if subplot_id == "main" else 1.0) if not _is_declared(value.zorder) else value.zorder
     return SubplotSpec(
         enabled=enabled, kind=kind, domain=domain, map_crs=None if not _is_declared(map_crs) else map_crs,
@@ -1208,6 +1219,17 @@ def resolve_chart_spec(value: ChartSpec | _ConfigSentinel = UNSET, *, pending: l
         for subplot_id, item in raw_subplots.items()
     }
     for subplot_id, subplot in resolved_subplots.items():
+        for annotation_id, annotation in subplot.annotations.items():
+            if annotation.crs is None:
+                continue
+            target_id = annotation.position.subplot
+            target_id = subplot_id if target_id in (UNSET, None) else target_id
+            target = resolved_subplots.get(target_id)
+            path = ("charts", chart_id, "subplots", subplot_id, "annotations", annotation_id)
+            if target is None or not target.enabled:
+                pending.append(Issue("missing_target", f"annotation targets missing subplot {target_id!r}", path))
+            elif target.kind != "map":
+                _fail("geographic annotation target must be a map subplot", code="subplot_kind", path=path)
         position = subplot.position
         if position.space != "subplot":
             continue
@@ -1252,7 +1274,9 @@ def resolve_chart_spec(value: ChartSpec | _ConfigSentinel = UNSET, *, pending: l
         _fail("each Chart must have one enabled main subplot", code="missing_main", path=("charts", chart_id))
     theme = resolve_theme(value.theme)
     decorations = resolve_decorations(value.decorations)
-    return ChartSpec(subplots=resolved_subplots, theme=theme, decorations=decorations)
+    result = ChartSpec(subplots=resolved_subplots, theme=theme, decorations=decorations)
+    object.__setattr__(result, "_subplots_declared", _is_declared(value.subplots))
+    return result
 
 
 def resolve_title(value: TitleSpec) -> TitleSpec:
@@ -1603,6 +1627,8 @@ def merge_config(base: _T, patch: _T | _ConfigSentinel) -> _T:
         return _freeze(patch)
     values: dict[str, Any] = {}
     for config_field in dataclasses.fields(patch):
+        if not config_field.init:
+            continue
         patch_value = getattr(patch, config_field.name)
         base_value = getattr(base, config_field.name)
         if patch_value is UNSET:

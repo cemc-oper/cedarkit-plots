@@ -42,8 +42,8 @@ class EmptyLoader(MapLoader):
 
 
 def field() -> xr.DataArray:
-    longitude = np.linspace(100, 130, 5)
-    latitude = np.linspace(20, 50, 4)
+    longitude = np.linspace(60, 150, 5)
+    latitude = np.linspace(0, 65, 4)
     return xr.DataArray(
         np.add.outer(latitude, longitude),
         dims=("latitude", "longitude"),

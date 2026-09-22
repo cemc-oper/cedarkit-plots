@@ -12,7 +12,7 @@ from __future__ import annotations
 import copy
 import math
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import timedelta
 from pathlib import Path
 from types import MappingProxyType
@@ -49,7 +49,7 @@ from cedarkit.plots.config import (
     resolve_config,
     validate_config,
 )
-from cedarkit.plots.errors import ClosedError, ContentError, RenderError, RenderRequiredError
+from cedarkit.plots.errors import ClosedError, ContentError, Issue, RenderError, RenderRequiredError
 from cedarkit.plots.painter.component_bindutils import add_map_info_text
 from cedarkit.plots.style import BarbStyle, ContourStyle, LevelStep, Style
 
@@ -643,7 +643,7 @@ class _PanelImpl:
         source_user_defaults = UNSET if user_defaults is RESET else user_defaults
         source_user_rules = UNSET if user_rules is RESET else user_rules
         source_user_theme = UNSET if user_theme is RESET else user_theme
-        return resolve_config(
+        effective = resolve_config(
             layout=_merge_template_value(template_layout, user_layout),
             theme=global_theme,
             chart_defaults=UNSET,
@@ -659,6 +659,20 @@ class _PanelImpl:
             user_chart_rules=source_user_rules,
             user_theme=source_user_theme,
         )
+
+        pending = list(effective.pending)
+        for chart in self._charts.values():
+            for layer in chart._layers.values():
+                spec = effective.charts[chart.id]
+                try:
+                    self._validate_layer_against_spec(layer, spec)
+                except ContentError as exc:
+                    if spec._subplots_declared or exc.code not in {"missing_target", "method_target_mismatch"}:
+                        raise ConfigError(str(exc), code=exc.code, path=exc.path) from exc
+                    pending.append(Issue(exc.code, str(exc), ("charts", chart.id, "layers", layer.id)))
+        if complete and pending:
+            raise ConfigError(issues=pending)
+        return replace(effective, pending=tuple(pending))
 
     def _validate_effective_layers(self, effective: Any) -> None:
         for chart in self._charts.values():
@@ -780,7 +794,16 @@ class _PanelImpl:
         for layer in chart._layers.values():
             self._validate_layer_against_spec(layer, spec)
 
-    def _validate_layer_against_spec(self, layer: PlotLayer, spec: ChartSpec) -> tuple[str, ...]:
+    def _validate_layer_against_spec(self, layer: PlotLayer, spec: ChartSpec, *, allow_pending: bool = False) -> tuple[str, ...]:
+        _validate_color_count(layer.style, layer.method, layer.id)
+        _validate_expected_units(layer.style, layer.data if layer.method == "barbs" else (layer.data,))
+        if allow_pending and not spec._subplots_declared:
+            try:
+                return self._validate_layer_against_spec(layer, spec)
+            except ContentError as exc:
+                if exc.code in {"missing_target", "method_target_mismatch"}:
+                    return ()
+                raise
         targets = _layer_targets(layer, spec)
         for target in targets:
             subplot = spec.subplots[target]
@@ -811,7 +834,7 @@ class _PanelImpl:
         self._ensure_open()
         effective = self._resolve()
         spec = effective.charts[layer.chart.id]
-        self._validate_layer_against_spec(layer, spec)
+        self._validate_layer_against_spec(layer, spec, allow_pending=True)
         if layer.id in layer.chart._layers or layer.id in layer.chart._used_layer_ids:
             _content_error(f"duplicate or reused layer id {layer.id!r}", code="duplicate_id")
         layer.chart._layers[layer.id] = layer
@@ -830,7 +853,7 @@ class _PanelImpl:
         new_style = _copy_style(style)
         candidate = PlotLayer(layer.chart, layer.id, layer.method, data, new_style, targets, crs, new_zorder, vector_basis)
         effective = self._resolve()
-        self._validate_layer_against_spec(candidate, effective.charts[layer.chart.id])
+        self._validate_layer_against_spec(candidate, effective.charts[layer.chart.id], allow_pending=True)
         for binding in self._scales.values():
             if layer in binding.layers:
                 candidate_layers = tuple(candidate if item is layer else item for item in binding.layers)
@@ -1084,6 +1107,7 @@ class _PanelImpl:
                                 code="missing_target",
                                 path=("charts", chart.id, "subplots", target),
                             ) from exc
+                        _validate_coverage(layer, spec.subplots[target], prepared[layer], target)
                         artist, mappable = _draw_layer(
                             ax,
                             layer,
@@ -1236,10 +1260,13 @@ def _prepare_layer(layer: PlotLayer) -> Any:
 
 
 def _validate_expected_units(style: Style, data_values: Sequence[xr.DataArray]) -> None:
+    units = [item.attrs.get("units") for item in data_values]
+    declared = {unit for unit in units if unit is not None}
+    if len(declared) > 1:
+        _content_error(f"barb components declare different units: {units!r}", code="unit_mismatch")
     expected = getattr(style, "expected_units", None)
     if expected is None:
         return
-    units = [item.attrs.get("units") for item in data_values]
     if any(unit != expected for unit in units):
         _content_error(
             f"style expects units {expected!r}, got {units!r}",
@@ -1298,17 +1325,18 @@ def _style_scale_signature(style: Style) -> tuple[Any, ...]:
     else:
         level_signature = tuple(float(item) for item in np.asarray(levels).ravel())
     colors = style.colors
+    if colors is None or isinstance(colors, str):
+        colors = plt.get_cmap(colors)
     if isinstance(colors, mcolors.Colormap):
         color_signature = (
             "cmap",
-            colors.name,
-            tuple(np.asarray(colors(np.linspace(0, 1, min(colors.N, 16)))).ravel()),
+            tuple(np.asarray(colors(np.arange(colors.N))).ravel()),
             tuple(colors.get_under()),
             tuple(colors.get_over()),
             tuple(colors.get_bad()),
         )
     elif isinstance(colors, (list, tuple, np.ndarray)):
-        color_signature = ("colors", tuple(repr(item) for item in colors))
+        color_signature = ("colors", tuple(map(tuple, mcolors.to_rgba_array(colors))))
     else:
         color_signature = ("color", colors)
     return (
@@ -1618,6 +1646,8 @@ def _render_annotations(
                 position = annotation.position
                 if not isinstance(position, TextPosition):
                     continue
+                if position.space == "subplot" and position.subplot in (UNSET, None):
+                    position = replace(position, subplot=subplot_id)
                 kind, ax, x, y = _position_point(
                     position,
                     figure=figure,
@@ -1640,7 +1670,8 @@ def _render_annotations(
                     kwargs.pop("clip_on", None)
                     figure.text(x, y, annotation.text, **kwargs)
                 else:
-                    ax.text(x, y, annotation.text, transform=ax.transAxes, **kwargs)
+                    transform = ax.transAxes if annotation.crs is None else annotation.crs
+                    ax.text(x, y, annotation.text, transform=transform, **kwargs)
 
 
 def _mappable_signature(mappable: Any) -> tuple[Any, ...]:
@@ -1654,7 +1685,7 @@ def _mappable_signature(mappable: Any) -> tuple[Any, ...]:
         getattr(norm, "vmin", None),
         getattr(norm, "vmax", None),
         boundaries,
-        cmap.name,
+        tuple(np.asarray(cmap(np.arange(cmap.N))).ravel()),
         tuple(cmap.get_under()),
         tuple(cmap.get_over()),
         tuple(cmap.get_bad()),
@@ -1785,6 +1816,44 @@ def _render_colorbars(
     return result
 
 
+def _validate_color_count(style: Style, method: str, layer_id: str) -> None:
+    if not isinstance(style, ContourStyle) or style.levels is None or isinstance(style.levels, LevelStep):
+        return
+    palette = style.colors
+    if palette is None or isinstance(palette, (str, mcolors.Colormap)):
+        cmap = plt.get_cmap(palette) if not isinstance(palette, mcolors.Colormap) else palette
+        if style.norm == "boundary" and cmap.N < len(style.levels) - 1:
+            _content_error(f"layer {layer_id!r} colormap has insufficient colors", code="invalid_style")
+    else:
+        required = (len(style.levels) - 1 + (style.extend in {"min", "both"})
+                    + (style.extend in {"max", "both"})) if method == "contourf" else len(style.levels)
+        if len(palette) != required and not (method == "contour" and len(palette) == 1):
+            _content_error(f"layer {layer_id!r} needs {required} colors, got {len(palette)}", code="invalid_style")
+
+
+def _validate_coverage(layer: PlotLayer, spec: SubplotSpec, prepared: Any, target: str) -> None:
+    if spec.kind != "map" or spec.domain is None:
+        return
+    domain = spec.domain
+    if not isinstance(layer.data_crs, ccrs.PlateCarree) or layer.data_crs != domain.extent_crs:
+        return
+    west, east, south, north = domain.extent
+    x, y = prepared[:2]
+    # Geographic seam and polar domains cannot be proved by rectangular bounds.
+    if (west < -180 or east > 180 or west >= east or east - west >= 360 or south <= -90 or north >= 90
+            or np.min(x) < -180 or np.max(x) > 180
+            or isinstance(spec.map_crs, (ccrs.NorthPolarStereo, ccrs.SouthPolarStereo))
+            or not np.isfinite(x).all() or not np.isfinite(y).all()
+            or np.any(np.abs(np.diff(x)) > 180)):
+        return
+    if not (np.min(x) <= west + 1e-8 and np.max(x) >= east - 1e-8
+            and np.min(y) <= south + 1e-8 and np.max(y) >= north - 1e-8):
+        _content_error(
+            f"layer {layer.id!r} has insufficient coverage for domain extent {domain.extent!r} (subplot {target!r})",
+            code="insufficient_coverage", path=("charts", layer.chart.id, "layers", layer.id, "domain", target),
+        )
+
+
 def _draw_layer(
     ax: Any,
     layer: PlotLayer,
@@ -1800,6 +1869,7 @@ def _draw_layer(
     transform = {"transform": data_crs} if map_axis else {}
     if layer.method in {"contourf", "contour"}:
         x, y, values = prepared
+        _validate_color_count(style, layer.method, layer.id)
         kwargs: dict[str, Any] = {"zorder": layer.zorder, **transform}
         if style.levels is not None:
             kwargs["levels"] = style.levels
@@ -1807,26 +1877,35 @@ def _draw_layer(
             kwargs["linewidths"] = style.linewidths
         if style.linestyles is not None:
             kwargs["linestyles"] = style.linestyles
-        if style.levels is not None and getattr(style, "norm", "boundary") == "linear":
-            kwargs["norm"] = mcolors.Normalize(vmin=style.levels[0], vmax=style.levels[-1])
-        elif style.levels is not None and getattr(style, "norm", "boundary") == "log":
-            kwargs["norm"] = mcolors.LogNorm(vmin=style.levels[0], vmax=style.levels[-1])
-        elif style.levels is not None and getattr(style, "norm", "boundary") == "boundary":
-            kwargs["norm"] = mcolors.BoundaryNorm(style.levels, ncolors=256, clip=False)
         colors = style.colors
-        if layer.method == "contourf":
-            if getattr(style, "extend", "neither") != "neither":
-                kwargs["extend"] = style.extend
-            if isinstance(colors, (str, mcolors.Colormap)):
-                kwargs["cmap"] = colors
-            elif colors is not None:
+        cmap = None
+        if colors is None or isinstance(colors, (str, mcolors.Colormap)):
+            cmap = plt.get_cmap(colors) if not isinstance(colors, mcolors.Colormap) else colors
+            kwargs["cmap"] = cmap
+        else:
+            count = len(colors)
+            if layer.method == "contourf":
+                lower = int(style.extend in {"min", "both"})
+                upper = int(style.extend in {"max", "both"})
+                cmap = mcolors.ListedColormap(colors[lower:count - upper])
+                if lower:
+                    cmap.set_under(colors[0])
+                if upper:
+                    cmap.set_over(colors[-1])
+                kwargs["cmap"] = cmap
+            else:
                 kwargs["colors"] = colors
+        if style.levels is not None:
+            if style.norm == "linear":
+                kwargs["norm"] = mcolors.Normalize(vmin=style.levels[0], vmax=style.levels[-1])
+            elif style.norm == "log":
+                kwargs["norm"] = mcolors.LogNorm(vmin=style.levels[0], vmax=style.levels[-1])
+            elif cmap is not None:
+                kwargs["norm"] = mcolors.BoundaryNorm(style.levels, ncolors=cmap.N, clip=False)
+        kwargs["extend"] = style.extend
+        if layer.method == "contourf":
             result = ax.contourf(x, y, values, **kwargs)
             return result, result
-        if isinstance(colors, mcolors.Colormap):
-            colors = [colors(index) for index in range(colors.N)]
-        if colors is not None:
-            kwargs["colors"] = colors
         result = ax.contour(x, y, values, **kwargs)
         return result, result
     x, y, u_values, v_values = prepared
