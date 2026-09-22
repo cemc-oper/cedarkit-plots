@@ -111,6 +111,20 @@ class PanelTemplate:
 
 from .east_asia import east_asia, east_asia_chart
 from .ens_cn import ens_cn, ens_cn_chart, ens_cn_layout
+from .regions import (
+    cn_area,
+    cn_area_chart,
+    europe_asia,
+    europe_asia_chart,
+    global_area,
+    global_area_chart,
+    global_chart,
+    global_map,
+    global_map_chart,
+    north_polar,
+    north_polar_chart,
+)
+from .xy import time_profile, time_profile_chart, xy, xy_chart
 
 
 __all__ = [
@@ -121,4 +135,19 @@ __all__ = [
     "ens_cn",
     "ens_cn_chart",
     "ens_cn_layout",
+    "cn_area",
+    "cn_area_chart",
+    "europe_asia",
+    "europe_asia_chart",
+    "global_area",
+    "global_area_chart",
+    "global_chart",
+    "global_map",
+    "global_map_chart",
+    "north_polar",
+    "north_polar_chart",
+    "time_profile",
+    "time_profile_chart",
+    "xy",
+    "xy_chart",
 ]

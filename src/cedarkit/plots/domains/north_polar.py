@@ -14,18 +14,10 @@ from cedarkit.plots.painter.presets import create_china_map_painter
 
 from .layout import LayoutConfig
 from .map_template import MapTemplate
+from .remaining_config import NORTH_POLAR_AREA
 
 if TYPE_CHECKING:
     from cedarkit.plots.chart import Chart, Panel
-
-
-#: 北极投影默认区域（全球北半球）
-NORTH_POLAR_AREA = AreaRange(
-    start_longitude=-180,
-    end_longitude=180,
-    start_latitude=0,
-    end_latitude=90,
-)
 
 
 class NorthPolarMapTemplate(MapTemplate):

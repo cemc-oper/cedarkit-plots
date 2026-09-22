@@ -15,21 +15,13 @@ from cedarkit.plots.painter.presets import (
     create_south_china_sea_painter,
 )
 
-from .east_asia import SOUTH_CHINA_SEA_AREA
+from .east_asia_config import SOUTH_CHINA_SEA_AREA
 from .layout import LayoutConfig
 from .map_template import MapTemplate, SubMapConfig
+from .remaining_config import EUROPE_ASIA_AREA
 
 if TYPE_CHECKING:
     from cedarkit.plots.chart import Chart, Panel
-
-
-#: 欧亚默认区域（20°E–170°E, 0°–70°N）
-EUROPE_ASIA_AREA = AreaRange(
-    start_longitude=20,
-    end_longitude=170,
-    start_latitude=0,
-    end_latitude=70,
-)
 
 
 class EuropeAsiaMapTemplate(MapTemplate):

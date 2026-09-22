@@ -15,18 +15,10 @@ from cedarkit.plots.painter.presets import create_global_map_painter
 
 from .layout import LayoutConfig
 from .map_template import MapTemplate
+from .remaining_config import GLOBAL_AREA
 
 if TYPE_CHECKING:
     from cedarkit.plots.chart import Chart, Panel
-
-
-#: 全球默认区域
-GLOBAL_AREA = AreaRange(
-    start_longitude=-180,
-    end_longitude=180,
-    start_latitude=-90,
-    end_latitude=90,
-)
 
 
 class GlobalMapTemplate(MapTemplate):

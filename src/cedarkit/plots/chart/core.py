@@ -13,15 +13,18 @@ import copy
 import math
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from datetime import timedelta
 from pathlib import Path
 from types import MappingProxyType
 from typing import Any
 
 import cartopy.crs as ccrs
+import matplotlib.path as mpath
 import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
 from matplotlib.artist import Artist
 from matplotlib.figure import Figure
+from matplotlib.ticker import FuncFormatter
 import numpy as np
 import xarray as xr
 
@@ -38,6 +41,7 @@ from cedarkit.plots.config import (
     Rect,
     SubplotSpec,
     TextPosition,
+    TimeStepFormatter,
     TitleSpec,
     Theme,
     merge_config,
@@ -1101,6 +1105,14 @@ class _PanelImpl:
                 self._panel_titles,
                 slot_boxes,
             )
+            _render_annotations(
+                temporary,
+                effective,
+                self._charts,
+                chart_boxes,
+                rendered_subplots,
+                slot_boxes,
+            )
             rendered_colorbars = _render_colorbars(
                 temporary,
                 effective,
@@ -1584,6 +1596,53 @@ def _render_titles(
             )
 
 
+def _render_annotations(
+    figure: Figure,
+    effective: Any,
+    charts: Mapping[str, Chart],
+    chart_boxes: Mapping[str, tuple[float, float, float, float]],
+    rendered_subplots: Mapping[Chart, Mapping[str, Subplot]],
+    slot_boxes: Mapping[str, tuple[float, float, float, float]],
+) -> None:
+    """Render resolved subplot annotations without creating logical content."""
+
+    for chart in charts.values():
+        chart_spec = effective.charts[chart.id]
+        for subplot_id, subplot_spec in chart_spec.subplots.items():
+            annotations = subplot_spec.annotations
+            if not annotations or subplot_id not in rendered_subplots[chart]:
+                continue
+            for annotation in annotations.values():
+                if annotation.enabled is False:
+                    continue
+                position = annotation.position
+                if not isinstance(position, TextPosition):
+                    continue
+                kind, ax, x, y = _position_point(
+                    position,
+                    figure=figure,
+                    chart_box=chart_boxes[chart.id],
+                    subplots=rendered_subplots[chart],
+                    slot_boxes=slot_boxes,
+                    owner=chart,
+                )
+                kwargs = {
+                    "ha": "center" if position.ha is UNSET else position.ha,
+                    "va": "center" if position.va is UNSET else position.va,
+                    "fontsize": annotation.fontsize,
+                    "color": annotation.color,
+                    "fontfamily": chart_spec.theme.font_family,
+                    "clip_on": False,
+                }
+                if annotation.bbox is not None:
+                    kwargs["bbox"] = dict(annotation.bbox)
+                if kind == "figure":
+                    kwargs.pop("clip_on", None)
+                    figure.text(x, y, annotation.text, **kwargs)
+                else:
+                    ax.text(x, y, annotation.text, transform=ax.transAxes, **kwargs)
+
+
 def _mappable_signature(mappable: Any) -> tuple[Any, ...]:
     norm = mappable.norm
     boundaries = getattr(norm, "boundaries", None)
@@ -1971,6 +2030,14 @@ def _apply_axis_spec(
             ax.set_yticks(axis.yticks, crs=tick_crs)
         else:
             ax.set_yticks(axis.yticks)
+    if axis.xformatter is not None:
+        ax.xaxis.set_major_formatter(
+            _axis_formatter(axis.xformatter, map_axis=map_axis, longitude=True)
+        )
+    if axis.yformatter is not None:
+        ax.yaxis.set_major_formatter(
+            _axis_formatter(axis.yformatter, map_axis=map_axis, longitude=False)
+        )
     if not map_axis:
         if axis.xlim is not None:
             ax.set_xlim(axis.xlim)
@@ -2009,6 +2076,39 @@ def _apply_axis_spec(
         spine.set_visible(border.enabled)
         spine.set_color(border.color)
         spine.set_linewidth(border.linewidth)
+
+
+def _axis_formatter(value: str | TimeStepFormatter, *, map_axis: bool, longitude: bool) -> Any:
+    """Materialize one declarative axis formatter at render time."""
+
+    if isinstance(value, TimeStepFormatter):
+        def format_time(step: float, _position: int) -> str:
+            valid_time = value.start_time + timedelta(hours=float(step))
+            label = valid_time.strftime("%HZ")
+            if label == "00Z":
+                label += f"\n{valid_time.strftime('%d%b').upper()}"
+            if math.isclose(float(step), value.last_step):
+                label += f"\n{valid_time.strftime('%Y')}"
+            return label
+
+        return FuncFormatter(format_time)
+
+    if map_axis and value == "longitude":
+        from cartopy.mpl.ticker import LongitudeFormatter
+
+        return LongitudeFormatter(zero_direction_label=True, degree_symbol="")
+    if map_axis and value == "latitude":
+        from cartopy.mpl.ticker import LatitudeFormatter
+
+        return LatitudeFormatter(degree_symbol="")
+
+    def format_value(number: float, position: int) -> str:
+        try:
+            return value.format(x=number, pos=position)
+        except (IndexError, KeyError):
+            return value.format(number)
+
+    return FuncFormatter(format_value)
 
 
 def _map_info_values(value: Any) -> tuple[str, float, float]:
@@ -2051,6 +2151,28 @@ def _render_basemap(ax: Any, subplot_spec: SubplotSpec) -> None:
         ax.set_global()
     else:
         ax.set_extent(domain.extent, crs=domain.extent_crs)
+    if boundary == "circle":
+        theta = np.linspace(0, 2 * np.pi, 100)
+        center, radius = (0.5, 0.5), 0.5
+        vertices = np.vstack([np.sin(theta), np.cos(theta)]).T
+        circle = mpath.Path(vertices * radius + center)
+        ax.set_boundary(circle, transform=ax.transAxes)
+    elif boundary == "extent" and not isinstance(map_crs, ccrs.PlateCarree):
+        # LambertConformal used by EuropeAsia needs the same rectangular
+        # clipping path as the legacy template.  PlateCarree keeps Cartopy's
+        # normal extent boundary, which is already equivalent to the old
+        # EastAsia/CnArea behavior.
+        xmin, xmax, ymin, ymax = domain.extent
+        resolution = 1
+        vertices = (
+            [(longitude, ymin) for longitude in np.arange(xmin, xmax + 1, resolution)]
+            + [(xmax, latitude) for latitude in np.arange(ymin, ymax + 1, resolution)]
+            + [(longitude, ymax) for longitude in np.arange(xmax, xmin - 1, -resolution)]
+            + [(xmin, latitude) for latitude in np.arange(ymax, ymin - 1, -resolution)]
+        )
+        path = mpath.Path(vertices)
+        projection_transform = domain.extent_crs._as_mpl_transform(ax) - ax.transData
+        ax.set_boundary(projection_transform.transform_path(path))
     if basemap is None:
         return
 
