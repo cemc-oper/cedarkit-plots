@@ -1325,15 +1325,27 @@ def _map_chart_specs(
     chart_defaults: ChartSpec | _ConfigSentinel,
     chart_rules: Any,
     chart_configs: Mapping[str, ChartSpec] | _ConfigSentinel = UNSET,
+    panel_theme: Theme | _ConfigSentinel = UNSET,
     *,
     pending: list[Issue],
+    template_chart_defaults: ChartSpec | _ConfigSentinel = UNSET,
+    template_chart_rules: Any = UNSET,
+    template_theme: Theme | _ConfigSentinel = UNSET,
+    user_chart_defaults: ChartSpec | _ConfigSentinel = UNSET,
+    user_chart_rules: Any = UNSET,
+    user_theme: Theme | _ConfigSentinel = UNSET,
 ) -> dict[str, ChartSpec]:
-    rules = () if chart_rules is UNSET else chart_rules
-    if isinstance(rules, (str, bytes)) or not isinstance(rules, Sequence):
-        _fail("chart_rules must be a sequence", path=("chart_rules",))
-    for rule in rules:
-        if not isinstance(rule, ChartRule):
-            _fail("chart_rules must contain ChartRule values", path=("chart_rules",))
+    source_mode = any(
+        value is not UNSET
+        for value in (
+            template_chart_defaults,
+            template_chart_rules,
+            template_theme,
+            user_chart_defaults,
+            user_chart_rules,
+            user_theme,
+        )
+    )
     if chart_configs is not UNSET:
         if not isinstance(chart_configs, Mapping):
             _fail("chart_configs must be a mapping", path=("chart_configs",))
@@ -1341,6 +1353,120 @@ def _map_chart_specs(
             _check_id(chart_id, "chart config id")
             if not isinstance(spec, ChartSpec):
                 _fail("chart_configs values must be ChartSpec", path=("chart_configs", chart_id))
+    if source_mode:
+        for name, spec in (
+            ("template_chart_defaults", template_chart_defaults),
+            ("user_chart_defaults", user_chart_defaults),
+        ):
+            if spec is not UNSET and spec is not RESET and not isinstance(spec, ChartSpec):
+                _fail(f"{name} must be ChartSpec", path=(name,))
+        template_rules = () if template_chart_rules is UNSET else template_chart_rules
+        user_rules_declared = user_chart_rules is not UNSET
+        selected_rules = user_chart_rules if user_rules_declared else template_rules
+        if isinstance(selected_rules, (str, bytes)) or not isinstance(selected_rules, Sequence):
+            _fail("chart_rules must be a sequence", path=("chart_rules",))
+        for rule in selected_rules:
+            if not isinstance(rule, ChartRule):
+                _fail("chart_rules must contain ChartRule values", path=("chart_rules",))
+        template_rules = tuple(template_rules)
+        if user_rules_declared and (
+            isinstance(user_chart_rules, (str, bytes)) or not isinstance(user_chart_rules, Sequence)
+        ):
+            _fail("chart_rules must be a sequence", path=("chart_rules",))
+        user_rules = tuple(user_chart_rules) if user_rules_declared else ()
+        if any(not isinstance(rule, ChartRule) for rule in user_rules):
+            _fail("chart_rules must contain ChartRule values", path=("chart_rules",))
+        matched: dict[str, list[ChartRule]] = {chart_id: [] for chart_id, _ in chart_declarations}
+        for index, rule in enumerate(selected_rules):
+            matches = [
+                chart_id
+                for chart_id, role in chart_declarations
+                if _selector_matches(rule.selector, chart_id, role)
+            ]
+            if not matches and _selector_required(rule.selector):
+                pending.append(
+                    Issue(
+                        "missing_target",
+                        f"required chart rule {index} has no matching Chart",
+                        ("chart_rules", str(index)),
+                    )
+                )
+            for chart_id in matches:
+                matched[chart_id].append(rule)
+
+        template_matches: dict[str, list[ChartRule]] = {chart_id: [] for chart_id, _ in chart_declarations}
+        user_matches: dict[str, list[ChartRule]] = {chart_id: [] for chart_id, _ in chart_declarations}
+        if not user_rules_declared:
+            template_matches = matched
+        else:
+            user_matches = matched
+        for chart_id, rules_for_chart in (*template_matches.items(), *user_matches.items()):
+            if len(rules_for_chart) > 1:
+                _fail(
+                    f"Chart {chart_id!r} matches more than one chart rule",
+                    code="rule_conflict",
+                    path=("chart_rules", chart_id),
+                )
+
+        def without_theme(spec: Any) -> Any:
+            if spec is UNSET or spec is RESET:
+                return spec
+            return ChartSpec(subplots=spec.subplots, decorations=spec.decorations)
+
+        def add_theme(base: Any, value: Any) -> Any:
+            if value is UNSET or value is RESET:
+                return base
+            return merge_config(base, value)
+
+        specs: dict[str, ChartSpec] = {}
+        for chart_id, _ in chart_declarations:
+            base = ChartSpec()
+            template_default = template_chart_defaults
+            user_default = user_chart_defaults
+            if template_default is not UNSET and template_default is not RESET:
+                base = merge_config(base, without_theme(template_default))
+            template_rule = template_matches[chart_id][0] if template_matches[chart_id] else None
+            user_rule = user_matches[chart_id][0] if user_matches[chart_id] else None
+            if template_rule is not None:
+                base = merge_config(base, without_theme(template_rule.spec))
+            if user_default is not UNSET and user_default is not RESET:
+                base = merge_config(base, without_theme(user_default))
+            if user_rule is not None:
+                base = merge_config(base, without_theme(user_rule.spec))
+            if chart_configs is not UNSET and chart_id in chart_configs:
+                base = merge_config(base, without_theme(chart_configs[chart_id]))
+
+            effective_theme: Any = UNSET
+            if not user_rules_declared:
+                effective_theme = add_theme(effective_theme, template_theme)
+                if template_default is not UNSET and template_default is not RESET:
+                    effective_theme = add_theme(effective_theme, template_default.theme)
+                if template_rule is not None:
+                    effective_theme = add_theme(effective_theme, template_rule.spec.theme)
+                effective_theme = add_theme(effective_theme, user_theme)
+                if user_default is not UNSET and user_default is not RESET:
+                    effective_theme = add_theme(effective_theme, user_default.theme)
+            else:
+                effective_theme = add_theme(effective_theme, template_theme)
+                if template_default is not UNSET and template_default is not RESET:
+                    effective_theme = add_theme(effective_theme, template_default.theme)
+                effective_theme = add_theme(effective_theme, user_theme)
+                if user_default is not UNSET and user_default is not RESET:
+                    effective_theme = add_theme(effective_theme, user_default.theme)
+                if user_rule is not None:
+                    effective_theme = add_theme(effective_theme, user_rule.spec.theme)
+            if chart_configs is not UNSET and chart_id in chart_configs:
+                effective_theme = add_theme(effective_theme, chart_configs[chart_id].theme)
+            base = merge_config(base, ChartSpec(theme=effective_theme))
+            specs[chart_id] = resolve_chart_spec(base, pending=pending, chart_id=chart_id)
+        return specs
+
+    rules = () if chart_rules is UNSET else chart_rules
+    if isinstance(rules, (str, bytes)) or not isinstance(rules, Sequence):
+        _fail("chart_rules must be a sequence", path=("chart_rules",))
+    for rule in rules:
+        if not isinstance(rule, ChartRule):
+            _fail("chart_rules must contain ChartRule values", path=("chart_rules",))
     matched: dict[str, list[ChartRule]] = {chart_id: [] for chart_id, _ in chart_declarations}
     for index, rule in enumerate(rules):
         matches = [chart_id for chart_id, role in chart_declarations if _selector_matches(rule.selector, chart_id, role)]
@@ -1357,6 +1483,8 @@ def _map_chart_specs(
             base = merge_config(base, chart_defaults)
         if rules_for_chart:
             base = merge_config(base, rules_for_chart[0].spec)
+        if panel_theme is not UNSET and panel_theme is not RESET:
+            base = _apply_theme_patch(base, panel_theme)
         if chart_configs is not UNSET and chart_id in chart_configs:
             base = merge_config(base, chart_configs[chart_id])
         specs[chart_id] = resolve_chart_spec(base, pending=pending, chart_id=chart_id)
@@ -1373,6 +1501,12 @@ def resolve_config(
     decorations: DecorationSpec | _ConfigSentinel = UNSET,
     charts: Any = UNSET,
     complete: bool = False,
+    template_chart_defaults: ChartSpec | _ConfigSentinel = UNSET,
+    template_chart_rules: Sequence[ChartRule] | _ConfigSentinel = UNSET,
+    template_theme: Theme | _ConfigSentinel = UNSET,
+    user_chart_defaults: ChartSpec | _ConfigSentinel = UNSET,
+    user_chart_rules: Sequence[ChartRule] | _ConfigSentinel = UNSET,
+    user_theme: Theme | _ConfigSentinel = UNSET,
 ) -> EffectiveConfig:
     """Resolve ordinary configuration without importing templates or fields."""
 
@@ -1388,18 +1522,19 @@ def resolve_config(
     resolved_theme = resolve_theme(theme)
     resolved_decorations = resolve_decorations(decorations)
     resolved_charts = _map_chart_specs(
-        declarations, chart_defaults, chart_rules, chart_configs, pending=pending,
+        declarations,
+        chart_defaults,
+        chart_rules,
+        chart_configs,
+        panel_theme=theme,
+        pending=pending,
+        template_chart_defaults=template_chart_defaults,
+        template_chart_rules=template_chart_rules,
+        template_theme=template_theme,
+        user_chart_defaults=user_chart_defaults,
+        user_chart_rules=user_chart_rules,
+        user_theme=user_theme,
     )
-    # Panel-level theme is a source above ChartSpec.theme.  Apply only fields
-    # explicitly present in the user value; resolving the global defaults
-    # first must not erase a narrower chart-level override.
-    if theme is not UNSET and theme is not RESET:
-        if not isinstance(theme, Theme):
-            _fail("theme must be Theme", path=("theme",))
-        resolved_charts = {
-            chart_id: _apply_theme_patch(spec, theme)
-            for chart_id, spec in resolved_charts.items()
-        }
     if resolved_layout.expected_charts is not None and len(declarations) != resolved_layout.expected_charts:
         # resolve_layout already reported this; retain one diagnostic only.
         pass
@@ -1463,7 +1598,8 @@ def merge_config(base: _T, patch: _T | _ConfigSentinel) -> _T:
         return UNSET  # type: ignore[return-value]
     if not dataclasses.is_dataclass(patch):
         return _freeze(patch)
-    if not dataclasses.is_dataclass(base) or type(base) is not type(patch):
+    compatible_chart_specs = isinstance(base, ChartSpec) and isinstance(patch, ChartSpec)
+    if not dataclasses.is_dataclass(base) or (type(base) is not type(patch) and not compatible_chart_specs):
         return _freeze(patch)
     values: dict[str, Any] = {}
     for config_field in dataclasses.fields(patch):

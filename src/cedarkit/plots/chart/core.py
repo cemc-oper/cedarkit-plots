@@ -26,6 +26,7 @@ import numpy as np
 import xarray as xr
 
 from cedarkit.plots.config import (
+    RESET,
     UNSET,
     AxisSpec,
     Cell,
@@ -492,6 +493,27 @@ class Chart:
         self._layers.clear()
 
 
+def _validate_panel_template(value: Any) -> Any:
+    if value is None:
+        return None
+    from cedarkit.plots.templates import PanelTemplate
+
+    if not isinstance(value, PanelTemplate):
+        raise ConfigError(
+            "template must be a PanelTemplate or None",
+            code="invalid_template",
+        )
+    return value
+
+
+def _merge_template_value(template_value: Any, user_value: Any) -> Any:
+    if user_value is UNSET or user_value is RESET:
+        return template_value
+    if template_value is UNSET:
+        return user_value
+    return merge_config(template_value, user_value)
+
+
 class _PanelImpl:
     """Implementation behind the public compatibility facade."""
 
@@ -509,8 +531,7 @@ class _PanelImpl:
         rows: Any = UNSET,
         columns: Any = UNSET,
     ) -> None:
-        if template is not None:
-            raise ConfigError("templates are not implemented until D08", code="template_unavailable")
+        self._template = _validate_panel_template(template)
         if layout is UNSET:
             layout = LayoutSpec()
         if rows is not UNSET or columns is not UNSET:
@@ -593,6 +614,7 @@ class _PanelImpl:
     def _resolve(
         self,
         *,
+        template: Any = UNSET,
         layout: Any = UNSET,
         theme: Any = UNSET,
         chart_defaults: Any = UNSET,
@@ -602,16 +624,44 @@ class _PanelImpl:
         declarations: Any = UNSET,
         complete: bool = False,
     ):
+        active_template = self._template if template is UNSET else template
+        template_layout = UNSET if active_template is None else active_template.layout
+        template_theme = UNSET if active_template is None else active_template.theme
+        template_defaults = UNSET if active_template is None else active_template.chart_defaults
+        template_rules = UNSET if active_template is None else active_template.chart_rules
+        template_decorations = UNSET if active_template is None else active_template.decorations
+        user_layout = self._layout if layout is UNSET else layout
+        user_theme = self._theme if theme is UNSET else theme
+        user_defaults = self._chart_defaults if chart_defaults is UNSET else chart_defaults
+        user_rules = self._chart_rules if chart_rules is UNSET else chart_rules
+        user_decorations = self._decorations if decorations is UNSET else decorations
+        global_theme = _merge_template_value(template_theme, user_theme)
+        source_user_defaults = UNSET if user_defaults is RESET else user_defaults
+        source_user_rules = UNSET if user_rules is RESET else user_rules
+        source_user_theme = UNSET if user_theme is RESET else user_theme
         return resolve_config(
-            layout=self._layout if layout is UNSET else layout,
-            theme=self._theme if theme is UNSET else theme,
-            chart_defaults=self._chart_defaults if chart_defaults is UNSET else chart_defaults,
-            chart_rules=self._chart_rules if chart_rules is UNSET else chart_rules,
+            layout=_merge_template_value(template_layout, user_layout),
+            theme=global_theme,
+            chart_defaults=UNSET,
+            chart_rules=UNSET,
             chart_configs=self._chart_configs if chart_configs is UNSET else chart_configs,
-            decorations=self._decorations if decorations is UNSET else decorations,
+            decorations=_merge_template_value(template_decorations, user_decorations),
             charts=self._declarations() if declarations is UNSET else declarations,
             complete=complete,
+            template_chart_defaults=template_defaults,
+            template_chart_rules=template_rules,
+            template_theme=template_theme,
+            user_chart_defaults=source_user_defaults,
+            user_chart_rules=source_user_rules,
+            user_theme=source_user_theme,
         )
+
+    def _validate_effective_layers(self, effective: Any) -> None:
+        for chart in self._charts.values():
+            try:
+                self._validate_chart_layers(chart, effective)
+            except ContentError as exc:
+                raise ConfigError(str(exc), code=exc.code, path=exc.path) from exc
 
     def _commit(self, *, layout: Any, theme: Any, chart_defaults: Any, chart_rules: Any, chart_configs: Any, decorations: Any) -> None:
         self._layout = layout
@@ -677,20 +727,35 @@ class _PanelImpl:
         candidate_layout = merge_config(self._layout, layout) if layout is not UNSET else self._layout
         candidate_theme = merge_config(self._theme, theme) if theme is not UNSET else self._theme
         candidate_defaults = merge_config(self._chart_defaults, chart_defaults) if chart_defaults is not UNSET else self._chart_defaults
-        candidate_rules = self._chart_rules if chart_rules is UNSET else tuple(chart_rules)
+        if chart_rules is UNSET:
+            candidate_rules = self._chart_rules
+        elif chart_rules is RESET:
+            candidate_rules = UNSET
+        else:
+            candidate_rules = tuple(chart_rules)
         candidate_decorations = merge_config(self._decorations, decorations) if decorations is not UNSET else self._decorations
         effective = self._resolve(
             layout=candidate_layout, theme=candidate_theme,
             chart_defaults=candidate_defaults, chart_rules=candidate_rules,
-            decorations=candidate_decorations,
+            decorations=candidate_decorations, complete=bool(self._charts),
         )
-        for chart in self._charts.values():
-            self._validate_chart_layers(chart, effective)
+        self._validate_effective_layers(effective)
         self._commit(
             layout=candidate_layout, theme=candidate_theme,
             chart_defaults=candidate_defaults, chart_rules=candidate_rules,
             chart_configs=self._chart_configs, decorations=candidate_decorations,
         )
+
+    def apply_template(self, template: Any = None) -> None:
+        """Atomically replace the optional template source."""
+
+        self._ensure_open()
+        candidate = _validate_panel_template(template)
+        effective = self._resolve(template=candidate, complete=bool(self._charts))
+        self._validate_effective_layers(effective)
+        self._template = candidate
+        self._revision += 1
+        self._force_failed = False
 
     def _configure_chart(self, chart: Chart, patch: ChartSpec) -> None:
         self._ensure_open()
@@ -698,7 +763,7 @@ class _PanelImpl:
         candidate_config = merge_config(current, patch)
         candidate_configs = dict(self._chart_configs)
         candidate_configs[chart.id] = candidate_config
-        effective = self._resolve(chart_configs=candidate_configs)
+        effective = self._resolve(chart_configs=candidate_configs, complete=bool(self._charts))
         self._validate_chart_layers(chart, effective)
         self._chart_configs = candidate_configs
         chart._config = candidate_config
@@ -2194,6 +2259,11 @@ class Panel:
         if self._legacy is not None:
             raise ConfigError("configure is unavailable for the legacy domain API", code="legacy_api")
         return self._impl.configure(layout=layout, theme=theme, chart_defaults=chart_defaults, chart_rules=chart_rules, decorations=decorations)
+
+    def apply_template(self, template: Any = None) -> None:
+        if self._legacy is not None:
+            raise ConfigError("apply_template is unavailable for the legacy domain API", code="legacy_api")
+        return self._impl.apply_template(template)
 
     def render(self, *, force: bool = False) -> Figure:
         if self._legacy is not None:
