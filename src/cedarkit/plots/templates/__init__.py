@@ -110,6 +110,15 @@ class PanelTemplate:
 
 
 from .east_asia import east_asia, east_asia_chart
+from .ens_cn import ens_cn, ens_cn_chart, ens_cn_layout
 
 
-__all__ = ["ChartTemplate", "PanelTemplate", "east_asia", "east_asia_chart"]
+__all__ = [
+    "ChartTemplate",
+    "PanelTemplate",
+    "east_asia",
+    "east_asia_chart",
+    "ens_cn",
+    "ens_cn_chart",
+    "ens_cn_layout",
+]

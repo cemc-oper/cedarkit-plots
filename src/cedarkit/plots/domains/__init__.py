@@ -17,6 +17,7 @@ _LAZY_EXPORTS = {
     "TimeStepAndLevelXYTemplate": (".time_profile_template", "TimeStepAndLevelXYTemplate"),
     "EAST_ASIA_DOMAIN": (".east_asia_config", "EAST_ASIA_DOMAIN"),
     "SOUTH_CHINA_SEA_DOMAIN": (".east_asia_config", "SOUTH_CHINA_SEA_DOMAIN"),
+    "ENS_CN_DOMAIN": (".ens_cn_config", "ENS_CN_DOMAIN"),
 }
 
 
@@ -56,6 +57,7 @@ __all__ = [
     "CnAreaMapTemplate",
     "Domain",
     "EAST_ASIA_DOMAIN",
+    "ENS_CN_DOMAIN",
     "EastAsiaMapTemplate",
     "EnsCNMapTemplate",
     "EuropeAsiaMapTemplate",

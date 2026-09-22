@@ -6,7 +6,7 @@ from cartopy import crs as ccrs
 
 from cedarkit.plots.style import ContourStyle
 from cedarkit.plots.chart import Layer
-from cedarkit.plots.types import AreaRange, GraphTitle
+from cedarkit.plots.types import GraphTitle
 from cedarkit.plots.painter.component_bindutils import (
     fill_graph_title,
     set_map_box_title,
@@ -18,18 +18,10 @@ from cedarkit.plots.painter.axes_component_painter import (
 from cedarkit.plots.painter.presets import create_china_map_painter
 
 from .map_template import MapTemplate
+from .ens_cn_config import ENS_CN_AREA
 
 if TYPE_CHECKING:
     from cedarkit.plots.chart import Chart, Panel
-
-
-#: 集合预报中国区域（73°E–135°E, 16°N–56°N）
-ENS_CN_AREA = AreaRange(
-    start_longitude=73,
-    end_longitude=135,
-    start_latitude=16,
-    end_latitude=56,
-)
 
 
 class EnsCNMapTemplate(MapTemplate):
