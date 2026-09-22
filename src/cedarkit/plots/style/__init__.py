@@ -6,6 +6,14 @@ import matplotlib.colors as mcolors
 import matplotlib.ticker as mticker
 
 
+def _validate_accumulation_hours(value):
+    if value is not None and (
+        isinstance(value, bool) or not isinstance(value, (int, float))
+        or not np.isfinite(value) or value <= 0
+    ):
+        raise ValueError("accumulation_hours must be finite and positive")
+
+
 @dataclass
 class Style:
     def validate(self):
@@ -66,11 +74,13 @@ class ContourStyle(Style):
     norm: str = "boundary"
     extend: str = "neither"
     expected_units: Optional[str] = None
+    accumulation_hours: Optional[float] = None
 
     def __post_init__(self):
         self.validate()
 
     def validate(self):
+        _validate_accumulation_hours(self.accumulation_hours)
         if self.levels is not None and not isinstance(self.levels, LevelStep):
             levels = np.asarray(self.levels)
             if levels.ndim == 1 and len(levels) > 1:
@@ -97,6 +107,7 @@ class BarbStyle(Style):
     barb_increments: Optional[Dict] = None
     colorbar_style: Optional[ContourLabelStyle] = None
     expected_units: Optional[str] = None
+    accumulation_hours: Optional[float] = None
 
     def __post_init__(self):
         if self.barb_increments is None:
@@ -104,6 +115,7 @@ class BarbStyle(Style):
         self.validate()
 
     def validate(self):
+        _validate_accumulation_hours(self.accumulation_hours)
         if self.barb_increments is not None:
             required_keys = {"half", "full", "flag"}
             missing = required_keys - set(self.barb_increments.keys())
@@ -118,6 +130,7 @@ class BarbStyle(Style):
 
 from .registry import (  # noqa: E402
     StyleRegistry,
+    StyleMatchError,
     build_style,
     evaluate_levels,
     get_default_registry,

@@ -68,7 +68,12 @@ def _check_id(value: Any, name: str) -> str:
     return value
 
 
-def _copy_style(style: Style) -> Style:
+def _copy_style(style: Style | str, data: Any = None) -> Style:
+    if isinstance(style, str):
+        if style == "auto":
+            _content_error("core plotting requires an explicit style", code="invalid_style")
+        from cedarkit.plots.style import resolve_style
+        style = resolve_style(style, data)
     if not isinstance(style, Style):
         _content_error("style must be a Style instance", code="invalid_style")
     try:
@@ -227,7 +232,7 @@ class PlotLayer:
         self._id = layer_id
         self._method = method
         self._data = data
-        self._style = _copy_style(style)
+        self._style = _copy_style(style, data)
         self._subplots = subplots
         self._data_crs = data_crs
         self._zorder = zorder
@@ -392,7 +397,7 @@ class Chart:
         self,
         data: xr.DataArray,
         *,
-        style: ContourStyle,
+        style: ContourStyle | str,
         id: str | None = None,
         subplots: Any = "main",
         data_crs: Any = None,
@@ -404,7 +409,7 @@ class Chart:
         self,
         data: xr.DataArray,
         *,
-        style: ContourStyle,
+        style: ContourStyle | str,
         id: str | None = None,
         subplots: Any = "main",
         data_crs: Any = None,
@@ -417,7 +422,7 @@ class Chart:
         u: xr.DataArray,
         v: xr.DataArray,
         *,
-        style: BarbStyle,
+        style: BarbStyle | str,
         id: str | None = None,
         subplots: Any = "main",
         data_crs: Any = None,
@@ -850,7 +855,7 @@ class _PanelImpl:
         if layer.method == "barbs" and vector_basis not in {"grid", "earth"}:
             _content_error("vector_basis must be grid or earth", code="invalid_vector_basis")
         new_zorder = _validate_zorder(zorder)
-        new_style = _copy_style(style)
+        new_style = _copy_style(style, data)
         candidate = PlotLayer(layer.chart, layer.id, layer.method, data, new_style, targets, crs, new_zorder, vector_basis)
         effective = self._resolve()
         self._validate_layer_against_spec(candidate, effective.charts[layer.chart.id], allow_pending=True)
@@ -1264,6 +1269,9 @@ def _validate_expected_units(style: Style, data_values: Sequence[xr.DataArray]) 
     declared = {unit for unit in units if unit is not None}
     if len(declared) > 1:
         _content_error(f"barb components declare different units: {units!r}", code="unit_mismatch")
+    duration = getattr(style, "accumulation_hours", None)
+    if duration is not None and any(item.attrs.get("accumulation_hours") != duration for item in data_values):
+        _content_error(f"style expects accumulation_hours {duration!r}", code="accumulation_mismatch")
     expected = getattr(style, "expected_units", None)
     if expected is None:
         return
@@ -1346,6 +1354,7 @@ def _style_scale_signature(style: Style) -> tuple[Any, ...]:
         color_signature,
         style.extend,
         style.expected_units,
+        style.accumulation_hours,
     )
 
 

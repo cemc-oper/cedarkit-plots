@@ -240,6 +240,8 @@ class StyleVariant(StrictModel):
     units: Optional[str] = None
     # v2 data values are already converted; styles only state their contract.
     expected_units: Optional[str] = None
+    # Duration of the already prepared accumulation, never forecast lead time.
+    accumulation_hours: Optional[float] = Field(default=None, gt=0, allow_inf_nan=False)
 
     @field_validator("units")
     @classmethod
@@ -251,6 +253,8 @@ class StyleVariant(StrictModel):
 
     @model_validator(mode="after")
     def check_type_fields(self) -> "StyleVariant":
+        if isinstance(self.levels, StepLevels) and self.highlight is not None:
+            raise ValueError("highlight requires fixed levels, not a dynamic step rule")
         contour_keys = ("colormap", "levels", "linestyles", "label", "highlight", "colorbar")
         barb_keys = ("length", "pivot", "barbcolor", "flagcolor", "barb_increments")
         if self.type == "barb":
@@ -274,6 +278,9 @@ class StyleFile(StrictModel):
 
     @model_validator(mode="after")
     def optimal_in_styles(self) -> "StyleFile":
+        for name in (self.id, *self.styles):
+            if not name or any(c in name for c in ".:") or any(c.isspace() for c in name):
+                raise ValueError("style and variant IDs must be non-empty without '.', ':' or whitespace")
         if self.optimal is not None and self.optimal not in self.styles:
             raise ValueError(
                 f"optimal variant {self.optimal!r} is not defined in styles "

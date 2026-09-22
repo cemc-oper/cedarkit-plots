@@ -6,14 +6,14 @@ mystnb:
 # 样式库编写指南
 
 cedarkit-plots 的要素样式库把"某个气象要素该怎么画"（色标、层次、
-特征线、单位换算）从 Python 代码中抽离为 YAML 样式文件，由
+特征线、期望单位）从 Python 代码中抽离为 YAML 样式文件，由
 {class}`~cedarkit.plots.style.registry.StyleRegistry` 统一加载、
 匹配与构建。本文介绍样式文件的结构与编写方法。
 
 ```{note}
 业务色标（CEMC 各要素）集中在 cedar-graph 的
 `cedar_graph/styles/cn/` 下，经 entry point 注入；cedarkit-plots
-自带 `style/builtin/` 中的通用样式。本文以两者为例。
+自带 `style/builtin/generic/` 中的通用样式。CEMC 全量资源内置由 D12-04 完成。本文以两者为例。
 ```
 
 ## 一个完整的例子
@@ -42,7 +42,7 @@ styles:
       level: 588
       linewidth: 1.4
       color_index: 1
-    units: dagpm
+    expected_units: dagpm
 ```
 
 顶层四个键：
@@ -84,8 +84,8 @@ levels: { linspace: [500, 588, 23] }  # np.linspace(start, stop, num)
 levels: { step: 4, reference: 0 }     # 按数据范围动态生成：以 reference 对齐、step 为间隔
 ```
 
-`step` 形式需要在构建样式时传入数据（`get_style(..., data=field)`），
-用于随数据范围变化的层次。
+`step` 构建为 `LevelStep` 规则，在新 Panel 的 render 阶段根据数据范围计算；
+`get_style(..., data=field)` 只读取元数据，不读取字段值。动态 step 不与固定层次 highlight 混用。
 
 ### colormap：四种来源 + matplotlib 名称
 
@@ -121,45 +121,65 @@ highlight:
 `color` / `color_index` / `line_colors`（三者互斥）等。
 `colorbar` 支持 `loc` / `label` / `label_levels`。
 
-### units：单位换算
+### 单位与累计时段
 
-变体可声明 `units`，值为内置换算表的目标单位：
+`expected_units` 声明已准备数据的规范单位，匹配和显式解析读取
+`attrs["units"]`，不相等或缺失即报错；没有声明时不猜源单位。
+`accumulation_hours` 为有限正数，声明累计量实际覆盖的小时数，读取
+同名 attrs，不从预报时效 `step` 或产品名称推断。两项约束会进入 Style
+快照，在登记、更新和渲染时校验；不执行转换或时间差分。
+旧 `units/get_transform/style_units` 暂由尚未迁移的 workflow 使用，D13 删除。
 
-| `units` | 假定源单位 | 换算 |
-|---|---|---|
-| `celsius` | K | `x - 273.15` |
-| `hPa` | Pa | `x / 100` |
-| `dagpm` | gpm | `x / 10` |
-| `mm` | m | `x * 1000` |
+## profile 加载与优先级
 
-声明后，配方的 `style_units` transform（或
-{meth}`~cedarkit.plots.style.registry.StyleRegistry.get_transform`）
-会把数据换算到目标单位再画图。写表外的单位名会在加载期报错。
+目录根下按 `<profile>/<id>.yml` 存放，例如 `my_styles/cemc/t2m.yml`。
+`StyleRegistry([root], profile="cemc", user_paths=[user_root], generic_fallback=())`
+默认选 cemc；显式 `profile="generic"` 或用户 profile 名可切换目录。
+显式传入的平铺目录归当前 profile；现有插件的平铺 STYLE_PATHS 在 default
+加载中归 cemc。内置资源与插件同属 base 层，环境变量 `CEDARKIT_STYLE_PATH`
+（os.pathsep 分隔）与 user_paths 同属 user 层。
 
-## 加载与优先级
+优先级为显式 Style/参数 → user 当前 profile → base 当前 profile →
+声明允许的 generic。`generic_fallback=("t",)` 仅允许自动匹配 generic.t，
+默认不回退；显式 ID 拼写错误或 variant 缺失始终报错。
+同 ID 的用户文件整体替换 base 文件，不合并 variants。
+同层同 profile 重复 ID 在加载时报出两个来源，整次 load_path 不提交。
 
-{meth}`~cedarkit.plots.style.registry.StyleRegistry.default`
-按以下顺序组装搜索路径，**后加载的覆盖先加载的**（同 id 后者胜）：
+自动匹配先选来源层，再选 specificity：取成功 criteria OR 分支中最多的
+已设置条件数，加上 optimal variant 的单位/累计时段约束数。
+同级最高分平局抛 StyleMatchError，不能用文件或插件顺序裁决。
+已识别字段却缺层次 metadata，或单位/时段约束失败的最高分候选阻止继续回退。
+只有没有相关候选时才尝试下一来源层。自动匹配只选择 optimal；季节、时段等
+产品规则应显式选择 variant。
 
-1. cedarkit-plots 内置 `style/builtin/`；
-2. `cedarkit.plots.styles` entry point（cedar-graph 经此注入
-   `cedar_graph/styles/cn/`；entry point 模块须定义 `STYLE_PATHS`）；
-3. 环境变量 `CEDARKIT_STYLE_PATH`（`os.pathsep` 分隔的目录列表）。
+`registry.explain(metadata)` 返回 profile、fallback 白名单、status、selected
+及 candidates；每个候选含规范 ID、source、tier、specificity、status 和 reasons，
+以及实际评估的 criteria 分支和 constraints（被用户替换的 base 候选只记录 shadowed 原因）。
+整体 status 为 selected/no_match/blocked/conflict；explain 不抛匹配冲突也不建图。
+`match` 在 blocked/conflict 时抛 StyleMatchError（带 explanation），无匹配返回 None。
 
-匹配（`style="auto"`）按相反顺序检查，业务样式优先于内置样式。
-
-## 在 Panel 上使用
+## 在新 Chart 上使用
 
 ```python
-panel.plot(field)                       # style 缺省 = "auto"：按 attrs 匹配 optimal 变体
-panel.plot(field, style="h_500")        # 指定 id，用 optimal 变体
-panel.plot(field, style="h_500:cn_ws")  # 指定 id:variant
-panel.plot(field, style=my_style)       # 直接给 Style 对象
+from cedarkit.plots import Panel
+from cedarkit.plots.style import StyleRegistry
+
+registry = StyleRegistry.default(profile="generic")
+style = registry.get_style("t", data=field, overrides={"colormap": "viridis"})
+panel = Panel()
+chart = panel.add_chart(id="temperature")
+layer = chart.contourf(field, style=style)
+# 也可直接写 chart.contourf(field, style="generic.t:default")
+panel.render()
+panel.close()
 ```
 
-`"auto"` 的匹配元数据由
-{func}`~cedarkit.plots.style.registry.metadata_from_field`
-从 reki 读出的 `DataArray`（attrs + 层次坐标）构造。
+`get_style("profile.id:variant")` 与 `get_style("profile.id", "variant")` 等价；
+未写 profile 用当前 profile，未写 variant 用 optimal，两个 variant 参数冲突时报错。
+overrides 使用 YAML StyleVariant 字段，整字段替换、schema 校验后构建独立对象，
+不修改注册内容；显式 Style 对象请直接构造其参数，不再叠加 overrides。
+核心 Chart 要求显式 Style 或 ID，拒绝 auto/None。调用方可通过
+`resolve_style("auto", field, registry=registry)` 单独执行自动选择。
 
 ## 校验与错误定位
 

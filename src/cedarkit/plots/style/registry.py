@@ -1,16 +1,4 @@
-"""StyleRegistry: load, match and build styles from style YAML files.
-
-Search path order (later paths override earlier ones on duplicate ids):
-
-1. built-in styles shipped with cedarkit-plots (``style/builtin/``)
-2. styles from packages exposing the ``cedarkit.plots.styles`` entry point
-   (e.g. cedar-graph's business style library)
-3. directories listed in the ``CEDARKIT_STYLE_PATH`` environment variable
-   (separated by ``os.pathsep``)
-
-Entry point modules are imported when the default registry is created, which
-is where they register their named RGB tables via :func:`register_rgb_table`.
-"""
+"""Profile-scoped style loading with deterministic matching and source explanations."""
 import importlib.metadata
 import math
 import os
@@ -22,11 +10,10 @@ import matplotlib
 import matplotlib.colors as mcolors
 import xarray as xr
 
-from . import BarbStyle, ColorbarStyle, ContourLabelStyle, ContourStyle, Style
+from . import BarbStyle, ColorbarStyle, ContourLabelStyle, ContourStyle, LevelStep, Style
 from ..colormap import generate_colormap_using_ncl_colors, get_ncl_colormap
 from .schema import (
     ColormapSpec,
-    CriteriaEntry,
     HighlightEntry,
     LabelSpec,
     LEVEL_TYPE_NAME_TO_CODE,
@@ -317,9 +304,10 @@ def build_style(
             kwargs["flagcolor"] = variant.flagcolor
         if variant.barb_increments is not None:
             kwargs["barb_increments"] = dict(variant.barb_increments)
-        return BarbStyle(**kwargs)
+        return BarbStyle(expected_units=variant.expected_units, accumulation_hours=variant.accumulation_hours, **kwargs)
 
-    levels = evaluate_levels(variant.levels, data=data)
+    levels = (LevelStep(variant.levels.step, variant.levels.reference)
+              if isinstance(variant.levels, StepLevels) else evaluate_levels(variant.levels))
 
     highlights = []
     if variant.highlight is not None:
@@ -350,6 +338,7 @@ def build_style(
             source is not None
             and isinstance(source.index, (int, np.integer))
             and levels is not None
+            and not isinstance(levels, LevelStep)
             and not variant.fill
     ):
         # scalar color index on a line contour: broadcast to per-level colors
@@ -371,6 +360,8 @@ def build_style(
         )
 
     return ContourStyle(
+        expected_units=variant.expected_units,
+        accumulation_hours=variant.accumulation_hours,
         colors=colors,
         levels=levels,
         linewidths=linewidths,
@@ -396,26 +387,10 @@ def _values_equal(expected: Any, actual: Any) -> bool:
     if actual is None:
         return False
     if isinstance(expected, (int, float)) and isinstance(actual, (int, float)):
+        if isinstance(actual, bool):
+            return False
         return math.isclose(expected, actual, rel_tol=1e-9, abs_tol=1e-12)
     return expected == actual
-
-
-def _entry_matches(entry: CriteriaEntry, metadata: Mapping[str, Any]) -> bool:
-    for key in (
-            "cemc_name", "eccodes_name", "wgrib2_name",
-            "first_level_type", "first_level",
-            "second_level_type", "second_level",
-            "discipline", "category", "number",
-    ):
-        expected = getattr(entry, key)
-        if expected is None:
-            continue
-        actual = metadata.get(key)
-        if key.endswith("level_type"):
-            actual = _normalize_level_type(actual)
-        if not _values_equal(expected, actual):
-            return False
-    return True
 
 
 _NON_LEVEL_COORDS = {
@@ -434,7 +409,7 @@ def metadata_from_field(field: xr.DataArray) -> Dict[str, Any]:
     """
     metadata: Dict[str, Any] = {}
     attrs = field.attrs
-    for key in ("cemc_name", "eccodes_name", "wgrib2_name"):
+    for key in ("cemc_name", "eccodes_name", "wgrib2_name", "units", "accumulation_hours"):
         value = attrs.get(key)
         if value is not None:
             metadata[key] = value
@@ -448,7 +423,7 @@ def metadata_from_field(field: xr.DataArray) -> Dict[str, Any]:
             metadata[key] = value
 
     for name, coord in field.coords.items():
-        if name in _NON_LEVEL_COORDS:
+        if name in _NON_LEVEL_COORDS or name not in LEVEL_TYPE_NAME_TO_CODE or coord.ndim != 0:
             continue
         metadata["first_level_type"] = name
         try:
@@ -468,126 +443,237 @@ _BUILTIN_STYLE_DIR = Path(__file__).parent / "builtin"
 _ENTRY_POINT_GROUP = "cedarkit.plots.styles"
 
 
+class StyleMatchError(ValueError):
+    """An ambiguous match or an unresolved business constraint."""
+
+    def __init__(self, explanation: Dict[str, Any]):
+        self.explanation = explanation
+        details = "; ".join(
+            f"{c['id']} ({c['source']}): {', '.join(c['reasons']) or c['status']}"
+            for c in explanation["candidates"] if c["status"] != "mismatch"
+        )
+        super().__init__(f"style match {explanation['status']}: {details}")
+
+
+def _profile_name(value: str) -> str:
+    if not isinstance(value, str) or not value or any(c in value for c in ".:/\\") or any(c.isspace() for c in value):
+        raise ValueError(f"invalid profile name: {value!r}")
+    return value
+
+
 class StyleRegistry:
-    """
-    Load style YAML files from search paths, match data metadata to style
-    ids, and build ``Style`` objects.
+    """Load profile roots, with separate base and user override tiers.
+
+    A root contains ``<profile>/*.yml``. A flat directory explicitly supplied
+    to the constructor belongs to the active profile (including existing
+    plugin STYLE_PATHS). Paths within a tier have equal priority.
     """
 
-    def __init__(self, search_paths: Sequence[Union[str, Path]]):
-        self._styles: Dict[str, StyleFile] = {}
-        self._paths: Dict[str, Path] = {}
-        for search_path in search_paths:
-            self.load_path(search_path)
+    def __init__(
+        self, search_paths: Sequence[Union[str, Path]] = (), *, profile: str = "cemc",
+        user_paths: Sequence[Union[str, Path]] = (), generic_fallback: Sequence[str] = (),
+    ):
+        self.profile = _profile_name(profile)
+        if isinstance(generic_fallback, str):
+            raise TypeError("generic_fallback must be a sequence of generic style IDs")
+        self.generic_fallback = frozenset(generic_fallback)
+        if any(not isinstance(i, str) or not i or any(c in i for c in ".:") for i in self.generic_fallback):
+            raise ValueError("generic_fallback contains an invalid style ID")
+        self._records: Dict[tuple[str, str, bool], tuple[StyleFile, Path]] = {}
+        for path in search_paths:
+            self.load_path(path)
+        for path in user_paths:
+            self.load_path(path, user=True)
 
-    def load_path(self, search_path: Union[str, Path]) -> None:
-        """Load all style YAML files in a directory (override on duplicate ids)."""
-        search_path = Path(search_path)
-        if not search_path.is_dir():
+    def load_path(self, search_path: Union[str, Path], *, user: bool = False) -> None:
+        """Atomically add a root; duplicate IDs in the same tier are errors."""
+        root = Path(search_path)
+        if not root.is_dir():
             return
-        files = sorted(search_path.glob("*.yml")) + sorted(search_path.glob("*.yaml"))
-        for file_path in files:
-            style_file = load_style_file(file_path)
-            self._styles[style_file.id] = style_file
-            self._paths[style_file.id] = file_path
+        pending = dict(self._records)
+        directories = [(self.profile, root)] + [
+            (_profile_name(p.name), p) for p in sorted(root.iterdir()) if p.is_dir()
+        ]
+        for profile, directory in directories:
+            for path in sorted([*directory.glob("*.yml"), *directory.glob("*.yaml")]):
+                spec = load_style_file(path)
+                key = (profile, spec.id, bool(user))
+                if key in pending:
+                    other = pending[key][1]
+                    raise StyleFileError(path, f"duplicate {profile}.{spec.id} in {'user' if user else 'base'} tier: {other} and {path}")
+                pending[key] = (spec, path)
+        self._records = pending
 
     @classmethod
-    def default(cls) -> "StyleRegistry":
-        """
-        Built-in styles + styles from ``cedarkit.plots.styles`` entry points
-        (e.g. cedar-graph, if installed) + ``CEDARKIT_STYLE_PATH`` directories.
-        """
-        search_paths: List[Union[str, Path]] = [_BUILTIN_STYLE_DIR]
-
-        for entry_point in importlib.metadata.entry_points(group=_ENTRY_POINT_GROUP):
-            module = entry_point.load()
+    def default(
+        cls, *, profile: str = "cemc", user_paths: Sequence[Union[str, Path]] = (),
+        generic_fallback: Sequence[str] = (),
+    ) -> "StyleRegistry":
+        paths = [_BUILTIN_STYLE_DIR]
+        for ep in sorted(importlib.metadata.entry_points(group=_ENTRY_POINT_GROUP), key=lambda e: (e.name, e.value)):
+            module = ep.load()
             style_paths = getattr(module, "STYLE_PATHS", None)
             if style_paths is None:
-                raise StyleFileError(
-                    entry_point.name,
-                    f"entry point module {module.__name__!r} does not define STYLE_PATHS",
-                )
-            search_paths.extend(style_paths)
-
-        env_path = os.environ.get("CEDARKIT_STYLE_PATH")
-        if env_path:
-            search_paths.extend(env_path.split(os.pathsep))
-
-        return cls(search_paths)
+                raise StyleFileError(ep.name, f"entry point module {module.__name__!r} does not define STYLE_PATHS")
+            # Existing graph flat STYLE_PATHS are CEMC, independently of the
+            # caller's selected profile. Load them below with that scope.
+            paths.extend(style_paths)
+        registry = cls(profile="cemc", generic_fallback=generic_fallback)
+        for path in paths:
+            registry.load_path(path)
+        registry.profile = _profile_name(profile)
+        env = os.environ.get("CEDARKIT_STYLE_PATH", "")
+        for path in [*(p for p in env.split(os.pathsep) if p), *user_paths]:
+            registry.load_path(path, user=True)
+        return registry
 
     @property
     def style_ids(self) -> List[str]:
-        return sorted(self._styles)
+        """IDs in the active profile; qualified references can access others."""
+        return sorted({i for p, i, user in self._records if p == self.profile})
+
+    def _lookup(self, reference: str, variant: Optional[str] = None):
+        field_id, colon, inline_variant = reference.partition(":")
+        if colon:
+            if not inline_variant or ":" in inline_variant or (variant is not None and variant != inline_variant):
+                raise ValueError(f"invalid or conflicting style variant: {reference!r}, {variant!r}")
+            variant = inline_variant
+        if "." in field_id:
+            profile, field_id = field_id.split(".", 1)
+        else:
+            profile = self.profile
+        _profile_name(profile)
+        for user in (True, False):
+            record = self._records.get((profile, field_id, user))
+            if record is not None:
+                spec, path = record
+                break
+        else:
+            raise KeyError(f"style id {profile}.{field_id!s} not found; loaded ids: {self.style_ids}")
+        variant = variant if variant is not None else spec.optimal
+        if variant is None:
+            raise ValueError(f"style {profile}.{field_id!s} has no optimal variant; specify one of {sorted(spec.styles)}")
+        if variant not in spec.styles:
+            raise KeyError(f"style {profile}.{field_id!s} has no variant {variant!r}; available: {sorted(spec.styles)}; source: {path}")
+        return profile, spec, variant, spec.styles[variant], path
+
+    @staticmethod
+    def _constraints(variant: StyleVariant, metadata: Mapping[str, Any]) -> List[str]:
+        reasons = []
+        for key, expected in (("units", variant.expected_units), ("accumulation_hours", variant.accumulation_hours)):
+            if expected is not None and not _values_equal(expected, metadata.get(key)):
+                reasons.append(f"{key}: expected {expected!r}, got {metadata.get(key)!r}")
+        return reasons
+
+    def explain(self, metadata: Mapping[str, Any]) -> Dict[str, Any]:
+        """Return selection, scores, sources and rejection reasons; never build."""
+        if not isinstance(metadata, Mapping):
+            raise TypeError("metadata must be a mapping")
+        candidates = []
+        scopes = [(self.profile, True), (self.profile, False)]
+        if self.profile != "generic" and self.generic_fallback:
+            scopes += [("generic", True), ("generic", False)]
+        selected = None
+        status = "no_match"
+        for profile, user in scopes:
+            tier_candidates = []
+            for (p, field_id, u), (spec, path) in sorted(self._records.items()):
+                if (p, u) != (profile, user):
+                    continue
+                if profile != self.profile and field_id not in self.generic_fallback:
+                    continue
+                if not user and (p, field_id, True) in self._records:
+                    candidates.append(dict(id=f"{p}.{field_id}", source=str(path), tier="base",
+                                           specificity=0, status="shadowed", reasons=["replaced by user profile file"]))
+                    continue
+                entries = []
+                for entry in spec.criteria:
+                    conditions = entry.model_dump(exclude_none=True)
+                    missing, mismatches = [], []
+                    for key, expected in conditions.items():
+                        actual = metadata.get(key)
+                        if key.endswith("level_type"):
+                            actual = _normalize_level_type(actual)
+                        if actual is None:
+                            missing.append(key)
+                        elif not _values_equal(expected, actual):
+                            mismatches.append(key)
+                    # Missing identity is not evidence that this business style
+                    # applies; missing level information after identity is.
+                    identity = set(conditions) & {"cemc_name", "eccodes_name", "wgrib2_name", "discipline", "category", "number"}
+                    relevant = bool(identity) and not (identity & set(missing))
+                    state = "mismatch" if mismatches or (missing and not relevant) else "blocked" if missing else "matched"
+                    entries.append((state, len(conditions), missing, mismatches, conditions))
+                matches = [e for e in entries if e[0] == "matched"]
+                partial = [e for e in entries if e[0] == "blocked"]
+                state, score, missing, mismatches, conditions = max(matches or partial or entries, key=lambda e: e[1])
+                reasons = [f"missing metadata: {', '.join(missing)}"] if missing else []
+                if mismatches:
+                    reasons.append(f"criteria mismatch: {', '.join(mismatches)}")
+                variant = spec.styles.get(spec.optimal)
+                if variant is not None:
+                    score += int(variant.expected_units is not None) + int(variant.accumulation_hours is not None)
+                if state == "matched":
+                    if variant is None:
+                        state, reasons = "blocked", ["no optimal variant; select an explicit variant"]
+                    else:
+                        constraints = self._constraints(variant, metadata)
+                        if constraints:
+                            state, reasons = "blocked", constraints
+                row = dict(id=f"{p}.{field_id}" + (f":{spec.optimal}" if spec.optimal else ""),
+                           source=str(path), tier="user" if user else "base", specificity=score,
+                           status=state, reasons=reasons, criteria=conditions,
+                           constraints={"units": variant.expected_units, "accumulation_hours": variant.accumulation_hours}
+                           if variant is not None else {})
+                candidates.append(row)
+                if state != "mismatch":
+                    tier_candidates.append(row)
+            if selected is not None or status in {"blocked", "conflict"}:
+                continue
+            if tier_candidates:
+                best = max(c["specificity"] for c in tier_candidates)
+                winners = [c for c in tier_candidates if c["specificity"] == best]
+                if any(c["status"] == "blocked" for c in winners):
+                    status = "blocked"
+                elif len(winners) > 1:
+                    status = "conflict"
+                else:
+                    status, selected = "selected", winners[0]["id"]
+        return {"profile": self.profile, "generic_fallback": sorted(self.generic_fallback),
+                "status": status, "selected": selected, "candidates": candidates}
 
     def match(self, metadata: Mapping[str, Any]) -> Optional[str]:
-        """
-        Match data metadata against style criteria; return the style id of
-        the first style file with a matching entry, or ``None``.
-
-        Styles are checked from the highest-priority search path backwards
-        (``CEDARKIT_STYLE_PATH`` → entry points → built-in), so specific
-        business styles win over generic built-in ones.
-        """
-        for style_id, style_file in reversed(list(self._styles.items())):
-            for entry in style_file.criteria:
-                if _entry_matches(entry, metadata):
-                    return style_id
-        return None
+        result = self.explain(metadata)
+        if result["status"] in {"blocked", "conflict"}:
+            raise StyleMatchError(result)
+        selected = result["selected"]
+        if selected is None:
+            return None
+        field_id = selected.split(":", 1)[0]
+        return field_id.removeprefix(self.profile + ".")
 
     def get_style(
-            self,
-            field_id: str,
-            variant: Optional[str] = None,
-            data: Optional[xr.DataArray] = None,
+        self, field_id: str, variant: Optional[str] = None, data: Optional[xr.DataArray] = None,
+        *, metadata: Optional[Mapping[str, Any]] = None, overrides: Optional[Mapping[str, Any]] = None,
     ) -> Style:
-        """
-        Build the ``Style`` for ``field_id`` and ``variant`` (default:
-        ``optimal``). Handles levels expression evaluation (data-driven
-        ``step`` form needs ``data``), highlight expansion and colormap
-        building.
-        """
-        style_file = self._styles.get(field_id)
-        if style_file is None:
-            raise KeyError(
-                f"style id {field_id!r} not found; loaded ids: {self.style_ids}"
-            )
-        if variant is None:
-            variant = style_file.optimal
-            if variant is None:
-                raise ValueError(
-                    f"style {field_id!r} has no optimal variant; "
-                    f"specify one of {sorted(style_file.styles)}"
-                )
-        variant_spec = style_file.styles.get(variant)
-        if variant_spec is None:
-            raise KeyError(
-                f"style {field_id!r} has no variant {variant!r}; "
-                f"available: {sorted(style_file.styles)}"
-            )
-        return build_style(style_file.id, variant, variant_spec, data=data)
+        profile, spec, variant_name, variant_spec, path = self._lookup(field_id, variant)
+        if overrides:
+            variant_spec = StyleVariant.model_validate({**variant_spec.model_dump(), **overrides})
+        if data is not None:
+            if metadata is not None:
+                raise ValueError("pass metadata or data, not both")
+            metadata = metadata_from_field(data)
+        # A constructed unit contract can be validated later by Chart. A
+        # duration constraint must be satisfied here before selecting a style.
+        if metadata is not None or variant_spec.accumulation_hours is not None:
+            reasons = self._constraints(variant_spec, metadata or {})
+            if reasons:
+                raise ValueError(f"style {profile}.{spec.id}:{variant_name} ({path}): {'; '.join(reasons)}")
+        return build_style(f"{profile}.{spec.id}", variant_name, variant_spec)
 
-    def get_transform(
-            self,
-            field_id: str,
-            variant: Optional[str] = None,
-    ) -> Optional[Callable]:
-        """
-        Return the data conversion function declared by the variant's
-        ``units`` entry (built-in conversion table), or ``None``.
-        """
-        style_file = self._styles.get(field_id)
-        if style_file is None:
-            raise KeyError(
-                f"style id {field_id!r} not found; loaded ids: {self.style_ids}"
-            )
-        if variant is None:
-            variant = style_file.optimal
-        variant_spec = style_file.styles.get(variant)
-        if variant_spec is None:
-            raise KeyError(
-                f"style {field_id!r} has no variant {variant!r}; "
-                f"available: {sorted(style_file.styles)}"
-            )
+    def get_transform(self, field_id: str, variant: Optional[str] = None) -> Optional[Callable]:
+        """Existing workflow conversion hook; removed with D13's old engine."""
+        _, _, _, variant_spec, _ = self._lookup(field_id, variant)
         return get_unit_transform(variant_spec.units)
 
 
@@ -622,6 +708,8 @@ def resolve_style(
         style: Union[Style, str, None],
         data: Any,
         registry: Optional[StyleRegistry] = None,
+        *,
+        overrides: Optional[Mapping[str, Any]] = None,
 ) -> Style:
     """
     Resolve a style spec into a ``Style`` object.
@@ -632,6 +720,8 @@ def resolve_style(
     * ``"id"`` / ``"id:variant"`` — explicit style id and optional variant.
     """
     if isinstance(style, Style):
+        if overrides:
+            raise ValueError("configure explicit Style objects directly; overrides apply to registry variants")
         return style
     if registry is None:
         registry = get_default_registry()
@@ -644,6 +734,5 @@ def resolve_style(
                 f"no style matched field metadata {metadata!r}; "
                 f"loaded ids: {registry.style_ids}"
             )
-        return registry.get_style(field_id, data=field)
-    field_id, _, variant = style.partition(":")
-    return registry.get_style(field_id, variant or None, data=field)
+        return registry.get_style(field_id, data=field, overrides=overrides)
+    return registry.get_style(style, data=field, overrides=overrides)

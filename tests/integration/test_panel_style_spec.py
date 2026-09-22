@@ -1,49 +1,40 @@
-"""Integration tests for Panel.plot style specs (style="auto" / "id:variant")."""
-import matplotlib
-matplotlib.use('Agg')
-import matplotlib.pyplot as plt
+"""New Chart style strings and explicitly selected generic auto matching."""
+import cartopy.crs as ccrs
 
-from cedarkit.plots.domains import GlobalMapTemplate
-from cedarkit.plots.chart import Panel
+from cedarkit.plots import Panel
+from cedarkit.plots.style import LevelStep, StyleRegistry, resolve_style
+from cedarkit.plots.templates import global_map
 
 
-class TestPanelStyleSpec:
-    def test_explicit_style_spec(
-        self,
-        global_temperature_field,
-        output_dir,
-    ):
-        """panel.plot(field, style="id:variant") uses the style library."""
-        field = global_temperature_field
-        field.attrs["cemc_name"] = "t"
-
-        domain = GlobalMapTemplate()
-        panel = Panel(domain=domain)
-        panel.plot(field, style="t:default")
-
+def test_explicit_style_spec(global_temperature_field, output_dir):
+    field = global_temperature_field.assign_attrs(cemc_name="t")
+    panel = Panel(template=global_map())
+    try:
+        chart = panel.add_chart(id="temperature")
+        layer = chart.contourf(field, style="generic.t:default", data_crs=ccrs.PlateCarree())
+        assert panel.fig is None
+        assert layer.style.levels == LevelStep(4, 0)
         output_path = output_dir / "global_temperature_style_spec.png"
         panel.save(output_path, dpi=150)
-        plt.close()
+        assert tuple(layer.results) == ("main",)
+        assert output_path.exists() and output_path.stat().st_size > 0
+    finally:
+        panel.close()
 
-        assert output_path.exists()
-        assert output_path.stat().st_size > 0
 
-    def test_auto_style(
-        self,
-        global_temperature_field,
-        output_dir,
-    ):
-        """panel.plot(field, style="auto") matches metadata and plots."""
-        field = global_temperature_field
-        field.attrs["cemc_name"] = "t"
-
-        domain = GlobalMapTemplate()
-        panel = Panel(domain=domain)
-        panel.plot(field, style="auto")
-
+def test_explicit_generic_auto_style(global_temperature_field, output_dir):
+    field = global_temperature_field.assign_attrs(cemc_name="t")
+    registry = StyleRegistry.default(profile="generic")
+    assert registry.explain({"cemc_name": "t"})["selected"] == "generic.t:default"
+    style = resolve_style("auto", field, registry=registry)
+    panel = Panel(template=global_map())
+    try:
+        chart = panel.add_chart(id="temperature")
+        layer = chart.contourf(field, style=style, data_crs=ccrs.PlateCarree())
         output_path = output_dir / "global_temperature_auto_style.png"
         panel.save(output_path, dpi=150)
-        plt.close()
-
-        assert output_path.exists()
-        assert output_path.stat().st_size > 0
+        assert layer.style.levels == LevelStep(4, 0)
+        assert tuple(layer.results) == ("main",)
+        assert output_path.exists() and output_path.stat().st_size > 0
+    finally:
+        panel.close()

@@ -332,7 +332,7 @@ class TestRegistryLoading:
         registry = StyleRegistry(["/no/such/dir", FIXTURE_DIR])
         assert "t2m" in registry.style_ids
 
-    def test_later_path_overrides(self, tmp_path):
+    def test_explicit_user_path_overrides(self, tmp_path):
         override = tmp_path / "override"
         override.mkdir()
         (override / "wind.yml").write_text("""
@@ -344,12 +344,12 @@ styles:
     type: barb
     barbcolor: blue
 """, encoding="utf-8")
-        registry = StyleRegistry([FIXTURE_DIR, override])
+        registry = StyleRegistry([FIXTURE_DIR], user_paths=[override])
         style = registry.get_style("wind", "custom")
         assert style.barbcolor == "blue"
 
     def test_builtin_styles_in_default(self):
-        default = StyleRegistry.default()
+        default = StyleRegistry.default(profile="generic")
         assert "t" in default.style_ids
 
     def test_unknown_style_id(self, registry):
