@@ -13,6 +13,7 @@ domains
 style
 engine
 colormap
+palette
 types
 testing
 ```

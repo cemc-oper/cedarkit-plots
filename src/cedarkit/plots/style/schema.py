@@ -122,11 +122,12 @@ LevelsSpec = Union[List[Union[int, float]], RangeLevels, LinspaceLevels, StepLev
 
 class ColormapSpec(StrictModel):
     """
-    Colormap source. Exactly one of ``ncl`` / ``rgb_table`` / ``colors`` /
+    Colormap source. Exactly one of ``palette`` / ``ncl`` / ``rgb_table`` / ``colors`` /
     ``ncl_colors`` must be set. A plain matplotlib colormap name is written
     as a bare string instead of this mapping.
     """
 
+    palette: Optional[str] = None
     ncl: Optional[str] = None
     rgb_table: Optional[str] = None
     colors: Optional[List[Any]] = None
@@ -142,14 +143,21 @@ class ColormapSpec(StrictModel):
     def exactly_one_source(self) -> "ColormapSpec":
         sources = [
             name
-            for name in ("ncl", "rgb_table", "colors", "ncl_colors")
+            for name in ("palette", "ncl", "rgb_table", "colors", "ncl_colors")
             if getattr(self, name) is not None
         ]
         if len(sources) != 1:
             raise ValueError(
                 f"colormap must set exactly one source "
-                f"(ncl/rgb_table/colors/ncl_colors), got: {sources}"
+                f"(palette/ncl/rgb_table/colors/ncl_colors), got: {sources}"
             )
+        if self.palette is not None:
+            if not self.palette:
+                raise ValueError("palette ID cannot be empty")
+            if self.index is not None or self.index_offset != 0 or any(
+                getattr(self, key) is not None for key in ("count", "spread_start", "spread_end")
+            ):
+                raise ValueError("native palette transformations must use a named derived palette")
         if self.colors is not None or self.ncl_colors is not None:
             for key in ("index", "index_offset", "count", "spread_start", "spread_end"):
                 value = getattr(self, key)

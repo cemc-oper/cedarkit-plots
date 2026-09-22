@@ -87,9 +87,10 @@ levels: { step: 4, reference: 0 }     # 按数据范围动态生成：以 refere
 `step` 构建为 `LevelStep` 规则，在新 Panel 的 render 阶段根据数据范围计算；
 `get_style(..., data=field)` 只读取元数据，不读取字段值。动态 step 不与固定层次 highlight 混用。
 
-### colormap：四种来源 + matplotlib 名称
+### colormap：原生 palette 与其他来源
 
 ```yaml
+colormap: { palette: cemc.t2m.cn_summer }      # 原生离散 palette
 colormap: viridis                            # matplotlib 色表名（裸字符串）
 colormap: { ncl: BlAqGrYeOrReVi200, index: [2, 18, 34], index_offset: -2 }
 colormap: { rgb_table: cn_hgt20, index: 14 } # 共享 RGB 表（register_rgb_table 注册）
@@ -97,7 +98,10 @@ colormap: { colors: ["#ff0000", "#00ff00"] } # 颜色列表
 colormap: { ncl_colors: [...] }              # NCL 颜色名列表
 ```
 
-四种来源必须**恰好设置一个**。`index` / `index_offset` / `count` /
+palette/ncl/rgb_table/colors/ncl_colors 必须**恰好设置一个**。
+原生 palette 只接受具名表，不接受 index/count/offset 等二次变换；其 label/highlight
+color_index 只指向实际选中表。迁移旧母表高亮/标签时使用 tools/style_palette_map.json
+中的显式颜色。NCL 来源待 D12-04/D14 调用迁移后删除。`index` / `index_offset` / `count` /
 `spread_start` / `spread_end` 只对 `ncl` / `rgb_table` 有效；
 `count` / `spread_start` / `spread_end` 只对 `ncl` 有效
 （schema 强制校验）。

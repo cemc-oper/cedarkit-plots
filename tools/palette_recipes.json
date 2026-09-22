@@ -1,0 +1,1027 @@
+{
+  "styles": {
+    "cemc.bli.cn_fill": {
+      "type": "contour",
+      "levels": [
+        -48,
+        -42,
+        -36,
+        -30,
+        -24,
+        -18,
+        -12,
+        -6,
+        0
+      ],
+      "colormap": {
+        "ncl": "prcp_3",
+        "index": [
+          20,
+          19,
+          18,
+          16,
+          14,
+          12,
+          10,
+          8,
+          6,
+          4
+        ],
+        "index_offset": -2
+      },
+      "fill": true
+    },
+    "cemc.bli.cn_line": {
+      "type": "contour",
+      "levels": [
+        -48,
+        -42,
+        -36,
+        -30,
+        -24,
+        -18,
+        -12,
+        -6,
+        0
+      ],
+      "colormap": {
+        "colors": [
+          "black"
+        ]
+      },
+      "linewidth": 0.5,
+      "label": {
+        "fontsize": 7,
+        "background_color": "white"
+      }
+    },
+    "cemc.cape.cn_fill": {
+      "type": "contour",
+      "levels": [
+        0,
+        10,
+        50,
+        100,
+        200,
+        300,
+        400,
+        500,
+        600,
+        700,
+        800,
+        900,
+        1000,
+        1100,
+        1200,
+        1300,
+        1400,
+        1500,
+        1750,
+        2000,
+        2250,
+        2500
+      ],
+      "colormap": {
+        "ncl": "WhBlGrYeRe",
+        "index": [
+          2,
+          7,
+          12,
+          17,
+          22,
+          27,
+          32,
+          37,
+          42,
+          47,
+          52,
+          57,
+          62,
+          67,
+          72,
+          77,
+          82,
+          87,
+          90,
+          93,
+          96,
+          99,
+          101
+        ],
+        "index_offset": -2
+      },
+      "fill": true
+    },
+    "cemc.cape.cn_line": {
+      "type": "contour",
+      "levels": [
+        0,
+        10,
+        50,
+        100,
+        200,
+        300,
+        400,
+        500,
+        600,
+        700,
+        800,
+        900,
+        1000,
+        1100,
+        1200,
+        1300,
+        1400,
+        1500,
+        1750,
+        2000,
+        2250,
+        2500
+      ],
+      "colormap": {
+        "ncl": "WhBlGrYeRe",
+        "index": [
+          0
+        ]
+      },
+      "linewidth": 0.15
+    },
+    "cemc.cdbz.cn": {
+      "type": "contour",
+      "levels": {
+        "range": [
+          10,
+          75,
+          5
+        ]
+      },
+      "colormap": {
+        "rgb_table": "cn_cr19",
+        "index": [
+          0,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15
+        ]
+      },
+      "fill": true
+    },
+    "cemc.cin.cn": {
+      "type": "contour",
+      "levels": [
+        0,
+        10,
+        20,
+        30,
+        40,
+        50,
+        60,
+        70,
+        80,
+        100,
+        150,
+        200
+      ],
+      "colormap": {
+        "ncl": "WhViBlGrYeOrRe",
+        "index": [
+          0,
+          64,
+          67,
+          70,
+          73,
+          76,
+          79,
+          82,
+          85,
+          88,
+          91,
+          94,
+          97
+        ]
+      },
+      "fill": true
+    },
+    "cemc.div.cn_fill": {
+      "type": "contour",
+      "levels": {
+        "range": [
+          -50,
+          0,
+          5
+        ]
+      },
+      "colormap": {
+        "ncl": "WhBlGrYeRe",
+        "count": 11,
+        "spread_start": 98,
+        "spread_end": 0
+      },
+      "fill": true
+    },
+    "cemc.div.cn_line": {
+      "type": "contour",
+      "levels": {
+        "range": [
+          -50,
+          0,
+          5
+        ]
+      },
+      "colormap": {
+        "colors": [
+          "black"
+        ]
+      },
+      "linewidth": 0.5,
+      "linestyles": "solid",
+      "label": {
+        "fontsize": 7,
+        "background_color": "white"
+      }
+    },
+    "cemc.h_500.cn_dagpm": {
+      "type": "contour",
+      "levels": {
+        "linspace": [
+          500,
+          588,
+          23
+        ]
+      },
+      "colormap": {
+        "rgb_table": "cn_hgt20",
+        "index": 14
+      },
+      "label": {
+        "inline": true,
+        "fontsize": 7,
+        "fmt": "{:.0f}",
+        "color_index": 15
+      },
+      "highlight": {
+        "level": 588,
+        "linewidth": 1.4,
+        "color_index": 1
+      },
+      "expected_units": "dagpm"
+    },
+    "cemc.h_500.cn_ws": {
+      "type": "contour",
+      "levels": {
+        "linspace": [
+          500,
+          588,
+          23
+        ]
+      },
+      "colormap": {
+        "rgb_table": "cn_hgt20",
+        "index": 12
+      },
+      "label": {
+        "inline": true,
+        "fontsize": 7,
+        "fmt": "{:.0f}"
+      },
+      "highlight": {
+        "level": 588,
+        "linewidth": 1.4
+      },
+      "expected_units": "dagpm"
+    },
+    "cemc.kidx.cn_fill": {
+      "type": "contour",
+      "levels": [
+        20,
+        25,
+        30,
+        35,
+        40,
+        45,
+        50
+      ],
+      "colormap": {
+        "ncl": "WhBlGrYeRe",
+        "index": [
+          0,
+          15,
+          45,
+          55,
+          65,
+          75,
+          85,
+          95,
+          100
+        ]
+      },
+      "fill": true
+    },
+    "cemc.kidx.cn_line": {
+      "type": "contour",
+      "levels": [
+        20,
+        25,
+        30,
+        35,
+        40,
+        45,
+        50
+      ],
+      "colormap": {
+        "colors": [
+          "black"
+        ]
+      },
+      "linewidth": 0.5,
+      "label": {
+        "fontsize": 7,
+        "background_color": "white"
+      }
+    },
+    "cemc.psl.cn": {
+      "type": "contour",
+      "levels": [
+        980,
+        985,
+        990,
+        995,
+        1000,
+        1005,
+        1020,
+        1025,
+        1030,
+        1035,
+        1040
+      ],
+      "colormap": {
+        "rgb_table": "cn_hgt20",
+        "index": [
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13
+        ]
+      },
+      "fill": true,
+      "expected_units": "hPa"
+    },
+    "cemc.pte_diff.cn_fill": {
+      "type": "contour",
+      "levels": [
+        -40,
+        -35,
+        -30,
+        -25,
+        -20,
+        -15,
+        -10,
+        -5,
+        0,
+        5
+      ],
+      "colormap": {
+        "rgb_table": "cn_pte"
+      },
+      "fill": true
+    },
+    "cemc.pte_diff.cn_line": {
+      "type": "contour",
+      "levels": [
+        -40,
+        -35,
+        -30,
+        -25,
+        -20,
+        -15,
+        -10,
+        -5,
+        0,
+        5
+      ],
+      "colormap": {
+        "colors": [
+          "black"
+        ]
+      },
+      "linewidth": 0.6,
+      "linestyles": "solid",
+      "label": {
+        "color": "black",
+        "background_color": "white",
+        "fontsize": 8
+      }
+    },
+    "cemc.qdiv.cn_fill": {
+      "type": "contour",
+      "levels": {
+        "range": [
+          -50,
+          0,
+          5
+        ]
+      },
+      "colormap": {
+        "ncl": "WhBlGrYeRe",
+        "count": 11,
+        "spread_start": 98,
+        "spread_end": 0
+      },
+      "fill": true
+    },
+    "cemc.qdiv.cn_line": {
+      "type": "contour",
+      "levels": {
+        "range": [
+          -50,
+          0,
+          5
+        ]
+      },
+      "colormap": {
+        "colors": [
+          "black"
+        ]
+      },
+      "linewidth": 0.2,
+      "linestyles": "-"
+    },
+    "cemc.rain.cn": {
+      "type": "contour",
+      "levels": [
+        0.1,
+        10,
+        25,
+        50,
+        100,
+        200
+      ],
+      "colormap": {
+        "ncl_colors": [
+          "transparent",
+          "White",
+          "DarkOliveGreen3",
+          "forestgreen",
+          "deepSkyBlue",
+          "Blue",
+          "Magenta",
+          "deeppink4"
+        ]
+      },
+      "fill": true,
+      "colorbar": {
+        "label": "rain"
+      }
+    },
+    "cemc.rain.cn_prep": {
+      "type": "contour",
+      "levels": [
+        0.1,
+        10,
+        25,
+        50,
+        100,
+        250
+      ],
+      "colormap": {
+        "ncl_colors": [
+          "transparent",
+          "PaleGreen2",
+          "ForestGreen",
+          "DeepSkyBlue",
+          "blue1",
+          "magenta1",
+          "DeepPink3",
+          "DarkOrchid4"
+        ]
+      },
+      "fill": true,
+      "colorbar": {
+        "label": "rain"
+      }
+    },
+    "cemc.rain.cn_1h": {
+      "type": "contour",
+      "levels": [
+        0.1,
+        1,
+        2,
+        4,
+        6,
+        8,
+        10,
+        20,
+        50
+      ],
+      "colormap": {
+        "ncl_colors": [
+          "White",
+          "DarkOliveGreen1",
+          "DarkOliveGreen3",
+          "forestgreen",
+          "deepSkyBlue",
+          "Blue",
+          "darkgreen",
+          "Magenta",
+          "darkorange",
+          "deeppink4"
+        ]
+      },
+      "fill": true
+    },
+    "cemc.rain.cn_3h": {
+      "type": "contour",
+      "levels": [
+        0.1,
+        3,
+        10,
+        20,
+        50,
+        70
+      ],
+      "colormap": {
+        "ncl_colors": [
+          "White",
+          "paleGreen2",
+          "forestgreen",
+          "deepSkyBlue",
+          "Blue",
+          "Magenta",
+          "deeppink4"
+        ]
+      },
+      "fill": true
+    },
+    "cemc.rain.cn_6h": {
+      "type": "contour",
+      "levels": [
+        0.1,
+        4,
+        13,
+        25,
+        60
+      ],
+      "colormap": {
+        "ncl_colors": [
+          "White",
+          "paleGreen2",
+          "forestgreen",
+          "deepSkyBlue",
+          "Blue",
+          "Magenta"
+        ]
+      },
+      "fill": true
+    },
+    "cemc.rain.cn_12h": {
+      "type": "contour",
+      "levels": [
+        0.1,
+        5,
+        15,
+        30,
+        70,
+        140
+      ],
+      "colormap": {
+        "ncl_colors": [
+          "White",
+          "paleGreen2",
+          "forestgreen",
+          "deepSkyBlue",
+          "Blue",
+          "Magenta",
+          "deeppink4"
+        ]
+      },
+      "fill": true
+    },
+    "cemc.rain.cn_24h": {
+      "type": "contour",
+      "levels": [
+        0.1,
+        10,
+        25,
+        50,
+        100,
+        200
+      ],
+      "colormap": {
+        "ncl_colors": [
+          "transparent",
+          "White",
+          "paleGreen2",
+          "forestgreen",
+          "deepSkyBlue",
+          "Blue",
+          "Magenta",
+          "deeppink4"
+        ]
+      },
+      "fill": true
+    },
+    "cemc.rain_snow.cn": {
+      "type": "contour",
+      "levels": [
+        0.1,
+        10,
+        25,
+        50,
+        100
+      ],
+      "colormap": {
+        "ncl": "precip_diff_12lev",
+        "index": [
+          6,
+          5,
+          4,
+          3,
+          2,
+          1
+        ]
+      },
+      "fill": true,
+      "colorbar": {
+        "label": "mix"
+      }
+    },
+    "cemc.rh2m.cn": {
+      "type": "contour",
+      "levels": {
+        "linspace": [
+          70,
+          100,
+          7
+        ]
+      },
+      "colormap": {
+        "ncl": "rainbow+white+gray",
+        "index": [
+          236,
+          110,
+          130,
+          150,
+          170,
+          190,
+          210,
+          230
+        ]
+      },
+      "fill": true
+    },
+    "cemc.sf.cn": {
+      "type": "contour",
+      "levels": [
+        0.1,
+        2.5,
+        5,
+        10,
+        20,
+        30
+      ],
+      "colormap": {
+        "ncl": "mch_default",
+        "index": [
+          0,
+          7,
+          6,
+          5,
+          4,
+          3,
+          1
+        ]
+      },
+      "fill": true,
+      "colorbar": {
+        "label": "snow"
+      }
+    },
+    "cemc.shr.cn_fill": {
+      "type": "contour",
+      "colormap": {
+        "rgb_table": "cn_shr",
+        "index": [
+          2,
+          4,
+          5,
+          6,
+          8,
+          13,
+          69,
+          73,
+          76,
+          79,
+          65,
+          64,
+          63,
+          62,
+          60,
+          58,
+          35
+        ],
+        "index_offset": -2
+      },
+      "fill": true
+    },
+    "cemc.shr.cn_line": {
+      "type": "contour",
+      "colormap": {
+        "colors": [
+          "blue"
+        ]
+      },
+      "linewidth": 0.3
+    },
+    "cemc.t2m.cn_summer": {
+      "type": "contour",
+      "colormap": {
+        "ncl": "BlAqGrYeOrReVi200",
+        "index": [
+          2,
+          18,
+          34,
+          50,
+          66,
+          82,
+          110,
+          120,
+          130,
+          140,
+          150,
+          160,
+          170,
+          180,
+          190,
+          200
+        ],
+        "index_offset": -2
+      },
+      "levels": [
+        -12,
+        -8,
+        -4,
+        0,
+        4,
+        8,
+        12,
+        16,
+        20,
+        24,
+        28,
+        32,
+        36,
+        40,
+        44
+      ],
+      "fill": true,
+      "expected_units": "degC"
+    },
+    "cemc.t2m.cn_winter": {
+      "type": "contour",
+      "colormap": {
+        "ncl": "BlAqGrYeOrReVi200",
+        "index": [
+          2,
+          12,
+          22,
+          32,
+          42,
+          52,
+          62,
+          72,
+          82,
+          92,
+          102,
+          112,
+          122,
+          132,
+          142,
+          152
+        ],
+        "index_offset": -2
+      },
+      "levels": [
+        -24,
+        -20,
+        -16,
+        -12,
+        -8,
+        -4,
+        0,
+        4,
+        8,
+        12,
+        16,
+        20,
+        24,
+        28,
+        32
+      ],
+      "fill": true,
+      "expected_units": "degC"
+    },
+    "cemc.t_dew_t.cn_fill": {
+      "type": "contour",
+      "levels": [
+        1,
+        3,
+        5,
+        7,
+        9,
+        11,
+        15,
+        17,
+        21,
+        25,
+        29,
+        33
+      ],
+      "colormap": {
+        "rgb_table": "cn_tdew",
+        "index": [
+          65,
+          70,
+          75,
+          80,
+          85,
+          100,
+          115,
+          130,
+          150,
+          160,
+          170,
+          180,
+          190
+        ],
+        "index_offset": -2
+      },
+      "fill": true
+    },
+    "cemc.t_dew_t.cn_line": {
+      "type": "contour",
+      "levels": [
+        1,
+        3,
+        5,
+        7,
+        9,
+        11,
+        15,
+        17,
+        21,
+        25,
+        29,
+        33
+      ],
+      "colormap": {
+        "rgb_table": "cn_tdew",
+        "index": [
+          65,
+          70,
+          75,
+          80,
+          85,
+          100,
+          115,
+          130,
+          150,
+          160,
+          170,
+          180,
+          190
+        ],
+        "index_offset": -2
+      },
+      "linewidth": 0.1,
+      "highlight": {
+        "level": 5,
+        "color_index": 199,
+        "linewidth": 2.0
+      }
+    },
+    "cemc.t_dew_t.cn_t": {
+      "type": "contour",
+      "levels": {
+        "linspace": [
+          -80,
+          80,
+          81
+        ]
+      },
+      "colormap": {
+        "rgb_table": "cn_tdew",
+        "index": 28
+      },
+      "linewidth": 1.0,
+      "linestyles": "solid",
+      "highlight": {
+        "level": 0,
+        "color": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "linewidth": 2.0
+      },
+      "label": {
+        "background_color": "white",
+        "line_colors": true
+      }
+    },
+    "cemc.ws_10m.cn": {
+      "type": "contour",
+      "levels": [
+        3.4,
+        5.5,
+        8,
+        10.8,
+        13.9,
+        17.2,
+        20.8,
+        24.5,
+        28.5
+      ],
+      "colormap": {
+        "rgb_table": "cn_ws15",
+        "index": [
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11
+        ]
+      },
+      "fill": true
+    },
+    "cemc.ws_850.cn": {
+      "type": "contour",
+      "levels": [
+        12,
+        15,
+        18,
+        21,
+        24,
+        27,
+        30
+      ],
+      "colormap": {
+        "rgb_table": "cn_ws15",
+        "index": [
+          2,
+          4,
+          5,
+          6,
+          7,
+          9,
+          10,
+          11
+        ]
+      },
+      "fill": true
+    }
+  },
+  "shr_names": [
+    "aquamarine",
+    "RoyalBlue",
+    "LightSkyBlue",
+    "blue",
+    "PowderBlue",
+    "lightseagreen",
+    "PaleGreen",
+    "Wheat",
+    "Brown",
+    "DarkOliveGreen3",
+    "red",
+    "Green",
+    "forestgreen",
+    "deepSkyBlue",
+    "Blue",
+    "mediumpurple1",
+    "Magenta",
+    "darkorange3"
+  ]
+}

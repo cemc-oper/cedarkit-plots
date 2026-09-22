@@ -127,3 +127,8 @@ def generate_colormap_using_ncl_colors(color_names: List[str], name: str) -> mco
 
         color_map = mcolors.ListedColormap(rgbs, name)
         return color_map
+
+
+# Native APIs use only packaged JSON; the functions above remain solely for
+# downstream callers scheduled for migration/removal in D12-04 and D14/D15.
+from .palette import get_named_color, get_palette, get_palette_info, palette_names  # noqa: E402

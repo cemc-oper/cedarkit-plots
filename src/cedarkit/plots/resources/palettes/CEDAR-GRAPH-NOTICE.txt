@@ -1,0 +1,10 @@
+The cn_hgt20, cn_ws15 and cn_cr19 palettes are copied from cedar-graph,
+src/cedar_graph/styles/__init__.py (author: Wang Dapeng).
+The exact source commit and SHA256 are recorded per table in catalog.json.
+Source project: https://github.com/cemc-oper/cedar-graph
+Source license: Apache License 2.0 (see Apache-2.0.txt).
+
+Modifications in cedarkit-plots: RGB integers encoded as native RGBA hex;
+indexed subsets, reversed samples and composite tables materialized offline;
+explicit under/over/bad colors and provenance added. No original author or
+provenance is claimed for the NCAR-derived portions of composite tables.

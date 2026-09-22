@@ -1,2 +1,8 @@
 recursive-include src/cedarkit/plots/resources *
 recursive-include src/cedarkit/plots/style/builtin *.yml *.yaml
+
+include tools/convert_palettes.py
+include tools/palette_sources.json
+include tools/palette_recipes.json
+include tools/palette_audit.json
+include tools/style_palette_map.json

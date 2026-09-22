@@ -12,6 +12,7 @@ import xarray as xr
 
 from . import BarbStyle, ColorbarStyle, ContourLabelStyle, ContourStyle, LevelStep, Style
 from ..colormap import generate_colormap_using_ncl_colors, get_ncl_colormap
+from ..palette import get_palette
 from .schema import (
     ColormapSpec,
     HighlightEntry,
@@ -113,6 +114,10 @@ class _ColorSource:
 def _resolve_color_source(spec: Union[str, ColormapSpec], name: str) -> _ColorSource:
     if isinstance(spec, str):
         return _ColorSource(colors=spec)
+
+    if spec.palette is not None:
+        table = get_palette(spec.palette)
+        return _ColorSource(colors=table, table=table)
 
     if spec.colors is not None:
         colors = spec.colors

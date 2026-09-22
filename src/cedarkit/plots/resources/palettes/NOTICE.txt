@@ -1,0 +1,29 @@
+CedarKit native palette catalog, schema version 1
+
+NCAR source distribution: NCAR/ncl tag 6.6.2 (2019).
+Copyright 2019 University Corporation for Atmospheric Research.
+License notice: NCAR-NCL-LICENSE.txt. Full terms: Apache-2.0.txt.
+Per-file URLs, upstream/local SHA256 and original header attributions are
+recorded in catalog.json. Attribution is to the verified NCL distribution,
+not a claim that NCAR originally authored every color table.
+
+Original header attributions retained:
+  mch_default and precip_diff_12lev: Converted from MeteoSwiss NCL library.
+  rainbow+white+gray: Gist palette; converted from an IDL colortable stored
+  in a netCDF file. The NTSC flag is a header comment/configuration value,
+  not a color row.
+
+Named colors are the verified subset of NCAR 6.6.2 ni/src/db/rgb/rgb.txt.
+Fourteen CSV rows absent from this distribution are excluded, not silently
+relicensed or aliased. The source audit lists them and proposed alternatives.
+Three unreferenced NCL tables are not included in this native catalog.
+
+Changes: native JSON RGBA encoding, fixed named derivatives for historical
+index/offset/sample/concatenation operations, explicit special colors,
+and transparent corrected from opaque white to white with alpha zero.
+Discrete table entries are not interpolated. All other colors retain their
+legacy RGB values, including the frozen legacy out-of-range kidx lookup.
+Cedar-graph handwritten tables: see CEDAR-GRAPH-NOTICE.txt.
+
+The old NCL runtime resources are not inputs to the native reader. Their
+existing downstream callers are scheduled for migration before removal.
