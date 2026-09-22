@@ -41,6 +41,7 @@ from cedarkit.plots.config import (
     validate_config,
 )
 from cedarkit.plots.errors import ClosedError, ContentError, RenderError, RenderRequiredError
+from cedarkit.plots.painter.component_bindutils import add_map_info_text
 from cedarkit.plots.style import BarbStyle, ContourStyle, Style
 
 
@@ -111,7 +112,14 @@ def _validate_data(method: str, data: Any) -> None:
 
 def _layer_targets(layer: "PlotLayer", spec: ChartSpec) -> tuple[str, ...]:
     subplots = spec.subplots
-    enabled = tuple(key for key, value in subplots.items() if value.enabled)
+    enabled = tuple(
+        key
+        for key, value in sorted(
+            subplots.items(),
+            key=lambda item: (0 if item[0] == "main" else 1, item[0]),
+        )
+        if value.enabled
+    )
     value = layer.subplots
     if value == "all":
         return enabled
@@ -663,6 +671,17 @@ class _PanelImpl:
                     f"XY data layer {layer.id!r} cannot target map subplot {target!r}",
                     code="method_target_mismatch",
                 )
+            if (
+                subplot.kind == "map"
+                and layer.method == "barbs"
+                and layer.vector_basis == "earth"
+                and not isinstance(layer.data_crs, ccrs.PlateCarree)
+            ):
+                _content_error(
+                    "earth-relative barbs require PlateCarree data_crs",
+                    code="vector_basis_mismatch",
+                    path=("charts", layer.chart.id, "layers", layer.id),
+                )
         return targets
 
     def _add_layer(self, layer: PlotLayer) -> None:
@@ -878,12 +897,19 @@ def _field_xy(data: xr.DataArray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     return x, y, values
 
 
-def _draw_layer(ax: Any, layer: PlotLayer) -> tuple[Artist, Any]:
+def _draw_layer(
+    ax: Any,
+    layer: PlotLayer,
+    *,
+    map_axis: bool = False,
+    data_crs: Any = None,
+) -> tuple[Artist, Any]:
     data = layer.data
     style = layer.style
+    transform = {"transform": data_crs} if map_axis else {}
     if layer.method in {"contourf", "contour"}:
         x, y, values = _field_xy(data)
-        kwargs: dict[str, Any] = {"zorder": layer.zorder}
+        kwargs: dict[str, Any] = {"zorder": layer.zorder, **transform}
         if style.levels is not None:
             kwargs["levels"] = style.levels
         if style.linewidths is not None:
@@ -915,6 +941,7 @@ def _draw_layer(ax: Any, layer: PlotLayer) -> tuple[Artist, Any]:
         length=style.length, linewidth=style.linewidth, pivot=style.pivot,
         barbcolor=style.barbcolor, flagcolor=style.flagcolor,
         barb_increments=style.barb_increments, zorder=layer.zorder,
+        **transform,
     )
     return result, None
 
@@ -1091,34 +1118,143 @@ def _subplot_boxes(
     return boxes
 
 
-def _apply_axis_spec(ax: Any, axis: AxisSpec) -> None:
+def _apply_axis_spec(
+    ax: Any,
+    axis: AxisSpec,
+    *,
+    map_axis: bool = False,
+    tick_crs: Any = None,
+) -> None:
     if axis.xticks is not None:
-        ax.set_xticks(axis.xticks)
+        if map_axis:
+            ax.set_xticks(axis.xticks, crs=tick_crs)
+        else:
+            ax.set_xticks(axis.xticks)
     if axis.yticks is not None:
-        ax.set_yticks(axis.yticks)
-    if axis.xlim is not None:
-        ax.set_xlim(axis.xlim)
-    if axis.ylim is not None:
-        ax.set_ylim(axis.ylim)
-    if axis.invert_y:
-        ax.invert_yaxis()
+        if map_axis:
+            ax.set_yticks(axis.yticks, crs=tick_crs)
+        else:
+            ax.set_yticks(axis.yticks)
+    if not map_axis:
+        if axis.xlim is not None:
+            ax.set_xlim(axis.xlim)
+        if axis.ylim is not None:
+            ax.set_ylim(axis.ylim)
+        if axis.invert_y:
+            ax.invert_yaxis()
     if axis.gridlines is not None:
         grid = axis.gridlines
-        ax.grid(
-            True,
-            color=grid.color,
-            linewidth=grid.linewidth,
-            alpha=grid.alpha,
-        )
-        if grid.xlocators is not None:
-            ax.set_xticks(grid.xlocators, minor=True)
-        if grid.ylocators is not None:
-            ax.set_yticks(grid.ylocators, minor=True)
+        if map_axis:
+            from matplotlib.ticker import FixedLocator
+
+            gridliner = ax.gridlines(
+                draw_labels=grid.labels,
+                color=grid.color,
+                linewidth=grid.linewidth,
+                alpha=grid.alpha,
+            )
+            if grid.xlocators is not None:
+                gridliner.xlocator = FixedLocator(grid.xlocators)
+            if grid.ylocators is not None:
+                gridliner.ylocator = FixedLocator(grid.ylocators)
+        else:
+            ax.grid(
+                True,
+                color=grid.color,
+                linewidth=grid.linewidth,
+                alpha=grid.alpha,
+            )
+            if grid.xlocators is not None:
+                ax.set_xticks(grid.xlocators, minor=True)
+            if grid.ylocators is not None:
+                ax.set_yticks(grid.ylocators, minor=True)
     border = axis.border
     for spine in ax.spines.values():
         spine.set_visible(border.enabled)
         spine.set_color(border.color)
         spine.set_linewidth(border.linewidth)
+
+
+def _map_info_values(value: Any) -> tuple[str, float, float]:
+    if isinstance(value, Mapping):
+        try:
+            text, x, y = value["text"], value["x"], value["y"]
+        except KeyError as exc:
+            raise ConfigError(
+                "map_info requires text, x and y",
+                code="invalid_map_info",
+                path=("basemap", "map_info"),
+            ) from exc
+    else:
+        try:
+            text, x, y = value.text, value.x, value.y
+        except AttributeError as exc:
+            raise ConfigError(
+                "map_info requires text, x and y",
+                code="invalid_map_info",
+                path=("basemap", "map_info"),
+            ) from exc
+    if not isinstance(text, str):
+        raise ConfigError("map_info.text must be a string", code="invalid_map_info")
+    return text, float(x), float(y)
+
+
+def _render_basemap(ax: Any, subplot_spec: SubplotSpec) -> None:
+    basemap = subplot_spec.basemap
+    domain = subplot_spec.domain
+    if domain is None:
+        raise ConfigError("map subplot requires a Domain", code="missing_domain")
+    map_crs = subplot_spec.map_crs
+    if not isinstance(map_crs, ccrs.Projection):
+        raise ConfigError(
+            "map subplot requires a Cartopy projection",
+            code="invalid_map_crs",
+        )
+    boundary = domain.boundary
+    if boundary == "global":
+        ax.set_global()
+    else:
+        ax.set_extent(domain.extent, crs=domain.extent_crs)
+    if basemap is None:
+        return
+
+    from cedarkit.plots.map import get_map_loader_class
+
+    loader_value = basemap.loader
+    loader_class = (
+        get_map_loader_class(loader_value)
+        if isinstance(loader_value, str)
+        else loader_value
+    )
+    if not isinstance(loader_class, type):
+        raise ConfigError("invalid map loader", code="invalid_map_loader")
+    try:
+        loader = loader_class(
+            map_type=basemap.map_type,
+            **dict(basemap.loader_kwargs),
+        )
+        for feature in basemap.features:
+            if not feature.enabled:
+                continue
+            features = loader.get_feature(feature.name, **dict(feature.kwargs))
+            if features is None:
+                raise ContentError(
+                    f"map feature {feature.name!r} returned None",
+                    code="invalid_map_feature",
+                )
+            for item in features:
+                ax.add_feature(item)
+        if basemap.map_info is not None:
+            text, x, y = _map_info_values(basemap.map_info)
+            add_map_info_text(ax, x=x, y=y, text=text)
+    except (ConfigError, ContentError):
+        raise
+    except Exception as exc:
+        raise RenderError(
+            "map resources failed to load",
+            stage="map",
+            cause=exc,
+        ) from exc
 
 
 def _create_subplots(
@@ -1128,29 +1264,91 @@ def _create_subplots(
     chart_box: tuple[float, float, float, float],
     generation: int,
 ) -> dict[str, Subplot]:
-    boxes = _subplot_boxes(spec, chart_box)
     result: dict[str, Subplot] = {}
-    for subplot_id, subplot_spec in sorted(
-        ((key, value) for key, value in spec.subplots.items() if value.enabled),
-        key=lambda item: (
-            float(item[1].zorder),
-            0 if item[0] == "main" else 1,
-            item[0],
-        ),
-    ):
-        if subplot_spec.kind != "xy":
-            raise ConfigError(
-                "map subplots are implemented by D06",
-                code="subplot_unavailable",
-                path=("charts", chart.id, "subplots", subplot_id),
+    enabled = {
+        subplot_id: subplot
+        for subplot_id, subplot in spec.subplots.items()
+        if subplot.enabled
+    }
+    while len(result) < len(enabled):
+        progress = False
+        for subplot_id, subplot_spec in sorted(
+            enabled.items(),
+            key=lambda item: (
+                float(item[1].zorder),
+                0 if item[0] == "main" else 1,
+                item[0],
+            ),
+        ):
+            if subplot_id in result:
+                continue
+            position = subplot_spec.position
+            if position.space == "chart":
+                parent_box = chart_box
+            elif position.space == "subplot":
+                parent_id = position.subplot
+                if parent_id not in result:
+                    continue
+                parent_box = result[parent_id]._ax.get_position().bounds
+            else:
+                raise ConfigError(
+                    "subplot positions must use chart or subplot space",
+                    code="layout_position",
+                    path=("charts", chart.id, "subplots", subplot_id, "position"),
+                )
+            box = _relative_box(
+                parent_box,
+                position.bounds,
+                path=("charts", chart.id, "subplots", subplot_id, "position"),
             )
-        ax = figure.add_axes(boxes[subplot_id])
-        ax.set_facecolor(spec.theme.axes_facecolor)
-        ax.tick_params(labelsize=spec.theme.tick_fontsize)
-        ax.set_aspect(subplot_spec.aspect)
-        ax.set_zorder(subplot_spec.zorder)
-        _apply_axis_spec(ax, subplot_spec.axis)
-        result[subplot_id] = Subplot(chart, subplot_id, ax, generation)
+            map_axis = subplot_spec.kind == "map"
+            if map_axis:
+                if not isinstance(subplot_spec.map_crs, ccrs.Projection):
+                    raise ConfigError(
+                        "map subplot requires a Cartopy projection",
+                        code="invalid_map_crs",
+                        path=("charts", chart.id, "subplots", subplot_id, "map_crs"),
+                    )
+                ax = figure.add_axes(box, projection=subplot_spec.map_crs)
+            elif subplot_spec.kind == "xy":
+                ax = figure.add_axes(box)
+            else:
+                raise ConfigError(
+                    f"unsupported subplot kind {subplot_spec.kind!r}",
+                    code="subplot_unavailable",
+                    path=("charts", chart.id, "subplots", subplot_id, "kind"),
+                )
+            ax.set_facecolor(spec.theme.axes_facecolor)
+            ax.tick_params(labelsize=spec.theme.tick_fontsize)
+            ax.set_aspect(subplot_spec.aspect)
+            ax.set_zorder(subplot_spec.zorder)
+            ax.apply_aspect()
+            _apply_axis_spec(
+                ax,
+                subplot_spec.axis,
+                map_axis=map_axis,
+                tick_crs=(subplot_spec.domain.extent_crs if map_axis else None),
+            )
+            if map_axis:
+                _render_basemap(ax, subplot_spec)
+                result[subplot_id] = MapSubplot(
+                    chart,
+                    subplot_id,
+                    ax,
+                    generation,
+                    subplot_spec.domain,
+                    subplot_spec.map_crs,
+                )
+            else:
+                result[subplot_id] = Subplot(chart, subplot_id, ax, generation)
+            progress = True
+        if not progress:
+            unresolved = tuple(subplot_id for subplot_id in enabled if subplot_id not in result)
+            raise ConfigError(
+                f"subplot positions contain an unresolved parent: {unresolved!r}",
+                code="layout_dependency",
+                path=("charts", chart.id, "subplots"),
+            )
     return result
 
 
