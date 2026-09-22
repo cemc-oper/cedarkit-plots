@@ -28,6 +28,7 @@ import xarray as xr
 from cedarkit.plots.config import (
     UNSET,
     AxisSpec,
+    Cell,
     ChartSpec,
     ConfigError,
     DecorationSpec,
@@ -35,6 +36,7 @@ from cedarkit.plots.config import (
     SubplotSpec,
     Theme,
     merge_config,
+    _ordered_chart_ids,
     resolve_config,
     validate_config,
 )
@@ -738,8 +740,6 @@ class _PanelImpl:
         if not force and not self.dirty and self._fig is not None:
             return self._fig
         effective = self._resolve(complete=True)
-        if len(self._charts) > 1 or effective.layout.rows != 1 or effective.layout.columns != 1:
-            raise ConfigError("D04 renderer supports one Chart in a 1x1 layout", code="layout_unavailable")
         generation = self._generation + 1
         temporary: Figure | None = None
         try:
@@ -748,48 +748,50 @@ class _PanelImpl:
                 dpi=effective.layout.dpi,
                 facecolor=effective.theme.figure_facecolor,
             )
-            temporary.subplots_adjust(
-                left=effective.layout.margins[0],
-                right=1 - effective.layout.margins[1],
-                bottom=effective.layout.margins[2],
-                top=1 - effective.layout.margins[3],
-                wspace=effective.layout.wspace,
-                hspace=effective.layout.hspace,
-            )
+            chart_boxes = _chart_boxes(temporary, effective, self._charts)
             rendered_subplots: dict[Chart, Mapping[str, Subplot]] = {}
             rendered_results: dict[PlotLayer, Mapping[str, LayerResult]] = {}
             for chart in self._charts.values():
                 spec = effective.charts[chart.id]
-                main_spec = spec.subplots["main"]
-                if main_spec.kind != "xy":
-                    raise ConfigError("D04 only renders XY main subplots", code="subplot_unavailable")
-                left, bottom, width, height = main_spec.position.bounds
-                ax = temporary.add_axes((left, bottom, width, height))
-                ax.set_facecolor(effective.theme.axes_facecolor)
-                ax.tick_params(labelsize=effective.theme.tick_fontsize)
-                runtime_subplot = Subplot(chart, "main", ax, generation)
-                rendered_subplots[chart] = {"main": runtime_subplot}
+                runtime_subplots = _create_subplots(
+                    temporary,
+                    chart,
+                    spec,
+                    chart_boxes[chart.id],
+                    generation,
+                )
+                rendered_subplots[chart] = runtime_subplots
                 if chart._titles:
                     # The default title is the first registered title; D07
                     # will expand this to configured title scopes.
-                    ax.set_title(next(reversed(chart._titles.values())), fontsize=effective.theme.title_fontsize, color=effective.theme.text_color)
+                    runtime_subplots["main"]._ax.set_title(
+                        next(reversed(chart._titles.values())),
+                        fontsize=spec.theme.title_fontsize,
+                        color=spec.theme.text_color,
+                    )
                 for layer in sorted(chart._layers.values(), key=lambda item: item.zorder):
                     targets = self._validate_layer_against_spec(layer, spec)
                     layer_results: dict[str, LayerResult] = {}
                     for target in targets:
-                        if target != "main":
-                            raise ConfigError("D04 renderer only supports main XY", code="subplot_unavailable")
+                        try:
+                            ax = runtime_subplots[target]._ax
+                        except KeyError as exc:
+                            raise ConfigError(
+                                f"layer {layer.id!r} target {target!r} has no rendered subplot",
+                                code="missing_target",
+                                path=("charts", chart.id, "subplots", target),
+                            ) from exc
                         artist, mappable = _draw_layer(ax, layer)
                         layer_results[target] = LayerResult(
                             artists=(artist,), mappable=mappable, generation=generation,
                         )
                     rendered_results[layer] = layer_results
-                if hasattr(self, "_panel_titles") and self._panel_titles:
-                    temporary.suptitle(
-                        next(reversed(self._panel_titles.values())),
-                        fontsize=effective.theme.title_fontsize,
-                        color=effective.theme.text_color,
-                    )
+            if hasattr(self, "_panel_titles") and self._panel_titles:
+                temporary.suptitle(
+                    next(reversed(self._panel_titles.values())),
+                    fontsize=effective.theme.title_fontsize,
+                    color=effective.theme.text_color,
+                )
             temporary.canvas.draw()
         except (ConfigError, ContentError):
             if temporary is not None:
@@ -800,7 +802,7 @@ class _PanelImpl:
             if temporary is not None:
                 plt.close(temporary)
             self._force_failed = force
-            raise RenderError("XY rendering failed", stage="draw", cause=exc) from exc
+            raise RenderError("rendering failed", stage="draw", cause=exc) from exc
         old_fig = self._fig
         self._fig = temporary
         self._generation = generation
@@ -915,6 +917,241 @@ def _draw_layer(ax: Any, layer: PlotLayer) -> tuple[Artist, Any]:
         barb_increments=style.barb_increments, zorder=layer.zorder,
     )
     return result, None
+
+
+def _cell_bounds(cell: Any) -> tuple[int, int, int, int]:
+    return (
+        cell.row,
+        cell.column,
+        cell.row + cell.rowspan,
+        cell.column + cell.colspan,
+    )
+
+
+def _cells_overlap(left: Any, right: Any) -> bool:
+    ltop, lleft, lbottom, lright = _cell_bounds(left)
+    rtop, rleft, rbottom, rright = _cell_bounds(right)
+    return ltop < rbottom and rtop < lbottom and lleft < rright and rleft < lright
+
+
+def _chart_cells(effective: Any, charts: Mapping[str, Chart]) -> dict[str, Any]:
+    """Materialize deterministic grid cells for the current Chart set."""
+
+    layout = effective.layout
+    declarations = tuple((chart.id, chart.role) for chart in charts.values())
+    chart_order, order_issues = _ordered_chart_ids(layout, declarations)
+    if order_issues:
+        raise ConfigError(issues=order_issues)
+    explicit = layout.placements
+    occupied: list[Any] = [
+        item for item in explicit.values() if hasattr(item, "row")
+    ]
+    occupied.extend(
+        slot.position
+        for slot in layout.slots.values()
+        if slot.enabled and hasattr(slot.position, "row")
+    )
+    cells: dict[str, Any] = {}
+    for chart_id in chart_order:
+        if chart_id in explicit:
+            cells[chart_id] = explicit[chart_id]
+            continue
+        found = None
+        for row in range(layout.rows):
+            for column in range(layout.columns):
+                candidate = Cell(row=row, column=column, rowspan=1, colspan=1)
+                if any(_cells_overlap(candidate, item) for item in occupied):
+                    continue
+                found = candidate
+                break
+            if found is not None:
+                break
+        if found is None:
+            raise ConfigError(
+                f"no free cell remains for Chart {chart_id!r}",
+                code="layout_capacity",
+                path=("layout",),
+            )
+        cells[chart_id] = found
+        occupied.append(found)
+    return cells
+
+
+def _chart_boxes(figure: Figure, effective: Any, charts: Mapping[str, Chart]) -> dict[str, tuple[float, float, float, float]]:
+    """Resolve Chart rectangles in normalized Figure coordinates."""
+
+    layout = effective.layout
+    if layout.mode == "absolute":
+        return {
+            chart_id: tuple(layout.placements[chart_id].bounds)
+            for chart_id in charts
+        }
+
+    cells = _chart_cells(effective, charts)
+    grid = figure.add_gridspec(
+        layout.rows,
+        layout.columns,
+        left=layout.margins[0],
+        right=1 - layout.margins[1],
+        bottom=layout.margins[2],
+        top=1 - layout.margins[3],
+        wspace=layout.wspace,
+        hspace=layout.hspace,
+    )
+    bottoms, tops, lefts, rights = grid.get_grid_positions(figure)
+    boxes: dict[str, tuple[float, float, float, float]] = {}
+    for chart_id, cell in cells.items():
+        top, left, bottom, right = _cell_bounds(cell)
+        figure_left = float(lefts[left])
+        figure_right = float(rights[right - 1])
+        figure_bottom = float(bottoms[bottom - 1])
+        figure_top = float(tops[top])
+        boxes[chart_id] = (
+            figure_left,
+            figure_bottom,
+            figure_right - figure_left,
+            figure_top - figure_bottom,
+        )
+    return boxes
+
+
+def _relative_box(
+    parent: tuple[float, float, float, float],
+    bounds: tuple[float, float, float, float],
+    *,
+    path: tuple[str, ...],
+) -> tuple[float, float, float, float]:
+    left, bottom, width, height = bounds
+    if left < 0 or bottom < 0 or left + width > 1 or bottom + height > 1:
+        raise ConfigError(
+            "relative subplot position must remain within its parent",
+            code="layout_bounds",
+            path=path,
+        )
+    parent_left, parent_bottom, parent_width, parent_height = parent
+    return (
+        parent_left + left * parent_width,
+        parent_bottom + bottom * parent_height,
+        width * parent_width,
+        height * parent_height,
+    )
+
+
+def _subplot_boxes(
+    spec: ChartSpec,
+    chart_box: tuple[float, float, float, float],
+) -> dict[str, tuple[float, float, float, float]]:
+    """Resolve chart-local subplot rectangles, including relative children."""
+
+    enabled = {
+        subplot_id: subplot
+        for subplot_id, subplot in spec.subplots.items()
+        if subplot.enabled
+    }
+    boxes: dict[str, tuple[float, float, float, float]] = {}
+    while len(boxes) < len(enabled):
+        progress = False
+        for subplot_id, subplot in sorted(
+            enabled.items(),
+            key=lambda item: (
+                float(item[1].zorder),
+                0 if item[0] == "main" else 1,
+                item[0],
+            ),
+        ):
+            if subplot_id in boxes:
+                continue
+            position = subplot.position
+            if position.space == "chart":
+                parent = chart_box
+            elif position.space == "subplot":
+                parent_id = position.subplot
+                if parent_id not in boxes:
+                    continue
+                parent = boxes[parent_id]
+            else:
+                raise ConfigError(
+                    "subplot positions must use chart or subplot space",
+                    code="layout_position",
+                    path=("subplots", subplot_id, "position"),
+                )
+            boxes[subplot_id] = _relative_box(
+                parent,
+                position.bounds,
+                path=("subplots", subplot_id, "position"),
+            )
+            progress = True
+        if not progress:
+            unresolved = tuple(subplot_id for subplot_id in enabled if subplot_id not in boxes)
+            raise ConfigError(
+                f"subplot positions contain an unresolved parent: {unresolved!r}",
+                code="layout_dependency",
+                path=("subplots",),
+            )
+    return boxes
+
+
+def _apply_axis_spec(ax: Any, axis: AxisSpec) -> None:
+    if axis.xticks is not None:
+        ax.set_xticks(axis.xticks)
+    if axis.yticks is not None:
+        ax.set_yticks(axis.yticks)
+    if axis.xlim is not None:
+        ax.set_xlim(axis.xlim)
+    if axis.ylim is not None:
+        ax.set_ylim(axis.ylim)
+    if axis.invert_y:
+        ax.invert_yaxis()
+    if axis.gridlines is not None:
+        grid = axis.gridlines
+        ax.grid(
+            True,
+            color=grid.color,
+            linewidth=grid.linewidth,
+            alpha=grid.alpha,
+        )
+        if grid.xlocators is not None:
+            ax.set_xticks(grid.xlocators, minor=True)
+        if grid.ylocators is not None:
+            ax.set_yticks(grid.ylocators, minor=True)
+    border = axis.border
+    for spine in ax.spines.values():
+        spine.set_visible(border.enabled)
+        spine.set_color(border.color)
+        spine.set_linewidth(border.linewidth)
+
+
+def _create_subplots(
+    figure: Figure,
+    chart: Chart,
+    spec: ChartSpec,
+    chart_box: tuple[float, float, float, float],
+    generation: int,
+) -> dict[str, Subplot]:
+    boxes = _subplot_boxes(spec, chart_box)
+    result: dict[str, Subplot] = {}
+    for subplot_id, subplot_spec in sorted(
+        ((key, value) for key, value in spec.subplots.items() if value.enabled),
+        key=lambda item: (
+            float(item[1].zorder),
+            0 if item[0] == "main" else 1,
+            item[0],
+        ),
+    ):
+        if subplot_spec.kind != "xy":
+            raise ConfigError(
+                "map subplots are implemented by D06",
+                code="subplot_unavailable",
+                path=("charts", chart.id, "subplots", subplot_id),
+            )
+        ax = figure.add_axes(boxes[subplot_id])
+        ax.set_facecolor(spec.theme.axes_facecolor)
+        ax.tick_params(labelsize=spec.theme.tick_fontsize)
+        ax.set_aspect(subplot_spec.aspect)
+        ax.set_zorder(subplot_spec.zorder)
+        _apply_axis_spec(ax, subplot_spec.axis)
+        result[subplot_id] = Subplot(chart, subplot_id, ax, generation)
+    return result
 
 
 class Panel:

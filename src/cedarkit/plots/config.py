@@ -791,6 +791,7 @@ def resolve_layout(
     value: LayoutSpec | _ConfigSentinel = UNSET,
     *,
     chart_ids: Iterable[str] = (),
+    chart_declarations: Iterable[tuple[str, str | None]] | None = None,
     complete: bool = False,
 ) -> tuple[LayoutSpec, tuple[Issue, ...]]:
     """Resolve layout defaults and perform static grid/absolute checks."""
@@ -800,6 +801,11 @@ def resolve_layout(
     if not isinstance(value, LayoutSpec):
         _fail("layout must be LayoutSpec", path=("layout",))
     chart_ids = tuple(chart_ids)
+    if chart_declarations is None:
+        chart_declarations = tuple((chart_id, None) for chart_id in chart_ids)
+    else:
+        chart_declarations = tuple(chart_declarations)
+        chart_ids = tuple(chart_id for chart_id, _ in chart_declarations)
     defaults = _default_layout()
     mode = defaults.mode if not _is_declared(value.mode) else value.mode
     rows = defaults.rows if not _is_declared(value.rows) else value.rows
@@ -823,15 +829,16 @@ def resolve_layout(
         margins=margins, wspace=wspace, hspace=hspace,
         placements=placements, order=order, slots=slots, expected_charts=expected,
     )
+    chart_order, order_issues = _ordered_chart_ids(effective, chart_declarations)
     if effective.mode == "grid" and effective.rows == "auto":
         effective = LayoutSpec(
-            mode=effective.mode, rows=_auto_grid_rows(effective, chart_ids),
+            mode=effective.mode, rows=_auto_grid_rows(effective, chart_order),
             columns=effective.columns, figsize=effective.figsize, dpi=effective.dpi,
             margins=effective.margins, wspace=effective.wspace, hspace=effective.hspace,
             placements=effective.placements, order=effective.order,
             slots=effective.slots, expected_charts=effective.expected_charts,
         )
-    issues = _layout_issues(effective, chart_ids)
+    issues = order_issues + _layout_issues(effective, chart_ids, chart_order=chart_order)
     blocking = tuple(issue for issue in issues if issue.code not in {"capacity", "missing_target", "expected_charts"})
     if blocking or (complete and issues):
         raise ConfigError(issues=blocking or issues)
@@ -874,9 +881,58 @@ def _auto_grid_rows(layout: LayoutSpec, chart_ids: tuple[str, ...]) -> int:
     return max(1, max((item.row + item.rowspan for item in occupied), default=1))
 
 
-def _layout_issues(layout: LayoutSpec, chart_ids: tuple[str, ...]) -> list[Issue]:
+def _ordered_chart_ids(
+    layout: LayoutSpec,
+    chart_declarations: tuple[tuple[str, str | None], ...],
+) -> tuple[tuple[str, ...], list[Issue]]:
+    """Return deterministic placement order and order diagnostics."""
+
+    chart_ids = tuple(chart_id for chart_id, _ in chart_declarations)
+    if layout.mode != "grid" or not layout.order:
+        return chart_ids, []
+    ordered: list[str] = []
+    seen: set[str] = set()
+    issues: list[Issue] = []
+    for index, selector in enumerate(layout.order):
+        matches = [
+            chart_id
+            for chart_id, role in chart_declarations
+            if _selector_matches(selector, chart_id, role)
+        ]
+        if not matches and _selector_required(selector):
+            issues.append(
+                Issue(
+                    "missing_target",
+                    f"required layout order selector {index} has no matching Chart",
+                    ("layout", "order", str(index)),
+                )
+            )
+        for chart_id in matches:
+            if chart_id in seen:
+                issues.append(
+                    Issue(
+                        "layout_order",
+                        f"Chart {chart_id!r} appears more than once in layout order",
+                        ("layout", "order", str(index)),
+                    )
+                )
+                continue
+            seen.add(chart_id)
+            ordered.append(chart_id)
+    ordered.extend(chart_id for chart_id in chart_ids if chart_id not in seen)
+    return tuple(ordered), issues
+
+
+def _layout_issues(
+    layout: LayoutSpec,
+    chart_ids: tuple[str, ...],
+    *,
+    chart_order: tuple[str, ...] | None = None,
+) -> list[Issue]:
     issues: list[Issue] = []
     chart_set = set(chart_ids)
+    if chart_order is None:
+        chart_order = chart_ids
     if layout.mode == "grid":
         if any(isinstance(item, Rect) for item in layout.placements.values()):
             issues.append(Issue("layout_position", "grid placements must use Cell", ("layout", "placements")))
@@ -896,15 +952,27 @@ def _layout_issues(layout: LayoutSpec, chart_ids: tuple[str, ...]) -> list[Issue
                 if _cells_overlap(left, right):
                     issues.append(Issue("layout_overlap", f"layout positions {left_id!r} and {right_id!r} overlap", ("layout",)))
         if layout.rows == "auto":
-            # The resolved LayoutSpec already contains the computed row count.
-            # There is no capacity failure in auto mode.
-            pass
+            # Auto rows expand for explicit row spans, but columns remain fixed.
+            for item_id, cell in positions:
+                if cell.column + cell.colspan > layout.columns:
+                    issues.append(
+                        Issue(
+                            "layout_bounds",
+                            f"{item_id!r} exceeds the fixed grid columns",
+                            ("layout",),
+                        )
+                    )
         else:
             for item_id, cell in positions:
                 if cell.row + cell.rowspan > layout.rows or cell.column + cell.colspan > layout.columns:
-                    issues.append(Issue("capacity", f"{item_id!r} exceeds the fixed grid capacity", ("layout",)))
+                    code = (
+                        "layout_bounds"
+                        if item_id in layout.placements or item_id.startswith("slot:")
+                        else "capacity"
+                    )
+                    issues.append(Issue(code, f"{item_id!r} exceeds the fixed grid capacity", ("layout",)))
             occupied = list(cell for _, cell in positions)
-            for chart_id in chart_ids:
+            for chart_id in chart_order:
                 if chart_id in layout.placements:
                     continue
                 found = False
@@ -1083,6 +1151,25 @@ def resolve_subplot(
         else:
             position = Rect(space="chart", bounds=(.12, .12, .72, .76))
     position = _effective_rect(position)
+    if position.space not in {"chart", "subplot"}:
+        _fail(
+            "subplot position must use chart or subplot space",
+            code="layout_position",
+            path=("subplots", subplot_id, "position"),
+        )
+    left, bottom, width, height = position.bounds
+    if left < 0 or bottom < 0 or left + width > 1 or bottom + height > 1:
+        _fail(
+            "subplot position must remain within its parent",
+            code="layout_bounds",
+            path=("subplots", subplot_id, "position"),
+        )
+    if subplot_id == "main" and position.space != "chart":
+        _fail(
+            "main subplot position must use chart space",
+            code="layout_position",
+            path=("subplots", subplot_id, "position"),
+        )
     aspect = ("equal" if kind == "map" else "auto") if not _is_declared(value.aspect) else value.aspect
     axis = resolve_axis(value.axis, map_axis=kind == "map")
     basemap = resolve_basemap(value.basemap)
@@ -1120,6 +1207,46 @@ def resolve_chart_spec(value: ChartSpec | _ConfigSentinel = UNSET, *, pending: l
         subplot_id: resolve_subplot(subplot_id, item, pending=pending)
         for subplot_id, item in raw_subplots.items()
     }
+    for subplot_id, subplot in resolved_subplots.items():
+        position = subplot.position
+        if position.space != "subplot":
+            continue
+        parent_id = position.subplot
+        if parent_id not in resolved_subplots or not resolved_subplots[parent_id].enabled:
+            pending.append(
+                Issue(
+                    "missing_target",
+                    f"subplot {subplot_id!r} references missing or disabled parent {parent_id!r}",
+                    ("charts", chart_id, "subplots", subplot_id, "position"),
+                )
+            )
+        if parent_id == subplot_id:
+            _fail(
+                f"subplot {subplot_id!r} cannot reference itself",
+                code="layout_dependency",
+                path=("charts", chart_id, "subplots", subplot_id, "position"),
+            )
+    visiting: set[str] = set()
+    visited: set[str] = set()
+
+    def check_parent_chain(subplot_id: str) -> None:
+        if subplot_id in visited:
+            return
+        if subplot_id in visiting:
+            _fail(
+                "subplot positions contain a cycle",
+                code="layout_dependency",
+                path=("charts", chart_id, "subplots", subplot_id, "position"),
+            )
+        visiting.add(subplot_id)
+        position = resolved_subplots[subplot_id].position
+        if position.space == "subplot" and position.subplot in resolved_subplots:
+            check_parent_chain(position.subplot)
+        visiting.remove(subplot_id)
+        visited.add(subplot_id)
+
+    for subplot_id in resolved_subplots:
+        check_parent_chain(subplot_id)
     main = resolved_subplots.get("main")
     if main is None or not main.enabled:
         _fail("each Chart must have one enabled main subplot", code="missing_main", path=("charts", chart_id))
@@ -1252,7 +1379,10 @@ def resolve_config(
     declarations = _chart_declarations(charts)
     pending: list[Issue] = []
     resolved_layout, layout_pending = resolve_layout(
-        layout, chart_ids=(chart_id for chart_id, _ in declarations), complete=False,
+        layout,
+        chart_ids=(chart_id for chart_id, _ in declarations),
+        chart_declarations=declarations,
+        complete=False,
     )
     pending.extend(layout_pending)
     resolved_theme = resolve_theme(theme)
@@ -1314,7 +1444,14 @@ def _deduplicate_issues(issues: Iterable[Issue]) -> list[Issue]:
 
 
 _T = TypeVar("_T")
-_MAPPING_MERGE_FIELDS = {"subplots", "annotations", "titles", "colorbars", "slots"}
+_MAPPING_MERGE_FIELDS = {
+    "subplots",
+    "annotations",
+    "titles",
+    "colorbars",
+    "placements",
+    "slots",
+}
 
 
 def merge_config(base: _T, patch: _T | _ConfigSentinel) -> _T:
