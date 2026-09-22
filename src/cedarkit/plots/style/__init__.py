@@ -13,6 +13,26 @@ class Style:
         pass
 
 
+@dataclass(frozen=True)
+class LevelStep:
+    """A reference-aligned, data-driven contour level rule."""
+
+    step: float
+    reference: float = 0.0
+
+    def __post_init__(self):
+        if isinstance(self.step, bool) or not isinstance(self.step, (int, float)):
+            raise TypeError("LevelStep.step must be a finite positive number")
+        if not np.isfinite(float(self.step)) or self.step <= 0:
+            raise ValueError("LevelStep.step must be a finite positive number")
+        if isinstance(self.reference, bool) or not isinstance(self.reference, (int, float)):
+            raise TypeError("LevelStep.reference must be finite")
+        if not np.isfinite(float(self.reference)):
+            raise ValueError("LevelStep.reference must be finite")
+        object.__setattr__(self, "step", float(self.step))
+        object.__setattr__(self, "reference", float(self.reference))
+
+
 @dataclass
 class ColorbarStyle(Style):
     loc: Optional[str] = None
@@ -36,19 +56,22 @@ class ContourLabelStyle(Style):
 @dataclass
 class ContourStyle(Style):
     colors: Optional[Union[str, List, mcolors.ListedColormap]] = None
-    levels: Optional[Union[List, np.ndarray]] = None
+    levels: Optional[Union[List, np.ndarray, LevelStep]] = None
     linewidths: Optional[Union[List, np.ndarray, float]] = None
     linestyles: Optional[Union[List, str]] = None
     fill: bool = False
     label: bool = False
     label_style: Optional[ContourLabelStyle] = None
     colorbar_style: Optional[ColorbarStyle] = None
+    norm: str = "boundary"
+    extend: str = "neither"
+    expected_units: Optional[str] = None
 
     def __post_init__(self):
         self.validate()
 
     def validate(self):
-        if self.levels is not None:
+        if self.levels is not None and not isinstance(self.levels, LevelStep):
             levels = np.asarray(self.levels)
             if levels.ndim == 1 and len(levels) > 1:
                 if not np.all(np.diff(levels) > 0):
@@ -56,6 +79,12 @@ class ContourStyle(Style):
                         f"ContourStyle.levels must be monotonically increasing, "
                         f"got: {self.levels}"
                     )
+        if self.norm not in {"boundary", "linear", "log"}:
+            raise ValueError("ContourStyle.norm must be boundary, linear or log")
+        if self.extend not in {"neither", "min", "max", "both"}:
+            raise ValueError("ContourStyle.extend must be neither, min, max or both")
+        if self.expected_units is not None and not isinstance(self.expected_units, str):
+            raise TypeError("ContourStyle.expected_units must be a string or None")
 
 
 @dataclass
@@ -67,6 +96,7 @@ class BarbStyle(Style):
     flagcolor: Optional[str] = "red"
     barb_increments: Optional[Dict] = None
     colorbar_style: Optional[ContourLabelStyle] = None
+    expected_units: Optional[str] = None
 
     def __post_init__(self):
         if self.barb_increments is None:
@@ -82,6 +112,8 @@ class BarbStyle(Style):
                     f"BarbStyle.barb_increments must contain keys {required_keys}, "
                     f"missing: {missing}"
                 )
+        if self.expected_units is not None and not isinstance(self.expected_units, str):
+            raise TypeError("BarbStyle.expected_units must be a string or None")
 
 
 from .registry import (  # noqa: E402

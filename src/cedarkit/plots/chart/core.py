@@ -30,10 +30,14 @@ from cedarkit.plots.config import (
     AxisSpec,
     Cell,
     ChartSpec,
+    ColorbarSpec,
     ConfigError,
     DecorationSpec,
     LayoutSpec,
+    Rect,
     SubplotSpec,
+    TextPosition,
+    TitleSpec,
     Theme,
     merge_config,
     _ordered_chart_ids,
@@ -42,7 +46,7 @@ from cedarkit.plots.config import (
 )
 from cedarkit.plots.errors import ClosedError, ContentError, RenderError, RenderRequiredError
 from cedarkit.plots.painter.component_bindutils import add_map_info_text
-from cedarkit.plots.style import BarbStyle, ContourStyle, Style
+from cedarkit.plots.style import BarbStyle, ContourStyle, LevelStep, Style
 
 
 def _content_error(message: str, *, code: str = "invalid_content", path: tuple[str, ...] = ()) -> None:
@@ -146,6 +150,21 @@ class LayerResult:
     generation: int
 
 
+@dataclass(frozen=True, slots=True)
+class _ColorbarBinding:
+    id: str
+    owner: "Chart | None"
+    layers: tuple["PlotLayer", ...]
+    subplots: str
+    label: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class _ScaleBinding:
+    id: str
+    layers: tuple["PlotLayer", ...]
+
+
 class Subplot:
     """A successful-render subplot result."""
 
@@ -166,6 +185,8 @@ class Subplot:
     @property
     def ax(self) -> Any:
         self._chart._ensure_current_results()
+        if self._generation != self._chart._panel._generation or self._chart._subplots.get(self._id) is not self:
+            raise RenderRequiredError("subplot belongs to a previous render")
         return self._ax
 
     @property
@@ -234,7 +255,10 @@ class PlotLayer:
     @property
     def style(self) -> Style:
         self._ensure_available()
-        return self._style
+        # Style values are snapshots.  Return a defensive copy so callers
+        # cannot mutate the style used by a later render through the public
+        # handle.
+        return _copy_style(self._style)
 
     @property
     def subplots(self) -> str | tuple[str, ...]:
@@ -433,6 +457,27 @@ class Chart:
         self._ensure_open()
         self._panel._set_title(self, text, id=id)
 
+    def colorbar(
+        self,
+        layers: PlotLayer | Sequence[PlotLayer],
+        *,
+        id: str | None = None,
+        subplots: str = "main",
+        label: str | None = None,
+    ) -> str:
+        self._ensure_open()
+        return self._panel._register_colorbar(
+            self,
+            layers,
+            id=id,
+            subplots=subplots,
+            label=label,
+        )
+
+    def remove_colorbar(self, id: str) -> None:
+        self._ensure_open()
+        self._panel._remove_colorbar(id, owner=self)
+
     def _set_subplots(self, subplots: Mapping[str, Subplot]) -> None:
         self._subplots = MappingProxyType(dict(subplots))
 
@@ -443,6 +488,7 @@ class Chart:
             layer._data = None
             layer._style = None
         self._subplots = MappingProxyType({})
+        self._titles.clear()
         self._layers.clear()
 
 
@@ -488,6 +534,14 @@ class _PanelImpl:
         self._charts: dict[str, Chart] = {}
         self._used_chart_ids: set[str] = set()
         self._next_chart_number = 1
+        self._panel_titles: dict[str, str] = {}
+        self._colorbars: dict[str, _ColorbarBinding] = {}
+        self._used_colorbar_ids: set[str] = set()
+        self._next_colorbar_number = 1
+        self._scales: dict[str, _ScaleBinding] = {}
+        self._used_scale_ids: set[str] = set()
+        self._next_scale_number = 1
+        self._rendered_colorbars: dict[str, Any] = {}
         self._fig: Figure | None = None
         self._revision = 0
         self._rendered_revision: int | None = None
@@ -708,6 +762,15 @@ class _PanelImpl:
         candidate = PlotLayer(layer.chart, layer.id, layer.method, data, new_style, targets, crs, new_zorder, vector_basis)
         effective = self._resolve()
         self._validate_layer_against_spec(candidate, effective.charts[layer.chart.id])
+        for binding in self._scales.values():
+            if layer in binding.layers:
+                candidate_layers = tuple(candidate if item is layer else item for item in binding.layers)
+                _validate_scale_layers(candidate_layers, context=f"scale {binding.id!r}")
+                if len({_style_scale_signature(item.style) for item in candidate_layers}) != 1:
+                    _content_error(
+                        f"update would make shared scale {binding.id!r} incompatible",
+                        code="incompatible_scale",
+                    )
         layer._data = data
         layer._style = new_style
         layer._subplots = targets
@@ -722,6 +785,12 @@ class _PanelImpl:
         chart = layer.chart
         if layer.id not in chart._layers:
             _content_error(f"layer {layer.id!r} is not registered", code="removed_layer")
+        references = self._layer_references(layer)
+        if references:
+            _content_error(
+                f"layer_in_use: layer {layer.id!r} is still referenced by {references!r}",
+                code="layer_in_use",
+            )
         del chart._layers[layer.id]
         layer._removed = True
         layer._clear_results()
@@ -743,10 +812,156 @@ class _PanelImpl:
 
     def _titles_for(self, owner: Chart | None) -> dict[str, str]:
         if owner is None:
-            if not hasattr(self, "_panel_titles"):
-                self._panel_titles: dict[str, str] = {}
             return self._panel_titles
         return owner._titles
+
+    def _normalise_binding_layers(
+        self,
+        owner: Chart | None,
+        layers: PlotLayer | Sequence[PlotLayer],
+        *,
+        allow_single: bool = True,
+    ) -> tuple[PlotLayer, ...]:
+        if isinstance(layers, PlotLayer):
+            values = (layers,)
+        elif isinstance(layers, (list, tuple)):
+            values = tuple(layers)
+        else:
+            _content_error(
+                "layers must be a PlotLayer or a non-empty list/tuple of PlotLayer values",
+                code="invalid_layer_reference",
+            )
+        if not values or (not allow_single and len(values) < 2):
+            _content_error(
+                "layers must contain at least one PlotLayer"
+                if allow_single else "shared scale requires at least two PlotLayer values",
+                code="invalid_layer_reference",
+            )
+        if any(not isinstance(layer, PlotLayer) for layer in values):
+            _content_error("layers must contain only PlotLayer values", code="invalid_layer_reference")
+        if len({id(layer) for layer in values}) != len(values):
+            _content_error("layers cannot contain duplicate PlotLayer references", code="duplicate_reference")
+        for layer in values:
+            layer._ensure_available()
+            if layer.chart._panel is not self:
+                _content_error("layer belongs to a different Panel", code="cross_panel_reference")
+            if owner is not None and layer.chart is not owner:
+                _content_error("Chart.colorbar layers must belong to that Chart", code="cross_chart_reference")
+        return values
+
+    def _next_reference_id(self, kind: str) -> str:
+        if kind == "colorbar":
+            used, counter = self._used_colorbar_ids, self._next_colorbar_number
+            prefix = "colorbar"
+        else:
+            used, counter = self._used_scale_ids, self._next_scale_number
+            prefix = "scale"
+        while f"{prefix}_{counter}" in used:
+            counter += 1
+        result = f"{prefix}_{counter}"
+        if kind == "colorbar":
+            self._next_colorbar_number = counter + 1
+        else:
+            self._next_scale_number = counter + 1
+        return result
+
+    def _register_colorbar(
+        self,
+        owner: Chart | None,
+        layers: PlotLayer | Sequence[PlotLayer],
+        *,
+        id: str | None,
+        subplots: str,
+        label: str | None,
+    ) -> str:
+        self._ensure_open()
+        values = self._normalise_binding_layers(owner, layers)
+        if not isinstance(subplots, str) or (not subplots):
+            _content_error("colorbar subplots must be a subplot ID or 'all'", code="invalid_target")
+        if label is not None and not isinstance(label, str):
+            _content_error("colorbar label must be a string or None", code="invalid_colorbar")
+        for layer in values:
+            spec = self._resolve().charts[layer.chart.id]
+            _validate_colorbar_target(layer, spec, subplots)
+        if id is None:
+            id = self._next_reference_id("colorbar")
+        _check_id(id, "colorbar id")
+        existing = self._colorbars.get(id)
+        if existing is not None and existing.owner is not owner:
+            _content_error(
+                f"colorbar {id!r} belongs to a different decoration scope",
+                code="duplicate_id",
+            )
+        self._colorbars[id] = _ColorbarBinding(id, owner, values, subplots, label)
+        self._used_colorbar_ids.add(id)
+        self._revision += 1
+        return id
+
+    def _remove_colorbar(self, id: str, *, owner: Chart | None = None) -> None:
+        self._ensure_open()
+        _check_id(id, "colorbar id")
+        binding = self._colorbars.get(id)
+        if binding is None or (owner is not None and binding.owner is not owner):
+            _content_error(f"colorbar {id!r} is not registered", code="missing_colorbar")
+        del self._colorbars[id]
+        self._rendered_colorbars.pop(id, None)
+        self._revision += 1
+
+    def _register_scale(
+        self,
+        layers: PlotLayer | Sequence[PlotLayer],
+        *,
+        id: str | None,
+    ) -> str:
+        self._ensure_open()
+        values = self._normalise_binding_layers(None, layers, allow_single=False)
+        if any(layer.method == "barbs" for layer in values):
+            _content_error("shared scale requires scalar contour layers", code="incompatible_scale")
+        for layer in values:
+            if any(
+                layer in binding.layers
+                for scale_id, binding in self._scales.items()
+                if scale_id != id
+            ):
+                _content_error(
+                    f"layer {layer.id!r} already belongs to a shared scale",
+                    code="incompatible_scale",
+                )
+        _validate_scale_layers(values, context="shared scale")
+        signatures = {_style_scale_signature(layer.style) for layer in values}
+        if len(signatures) != 1:
+            _content_error(
+                "shared scale layers must use compatible levels, norm, cmap and extend",
+                code="incompatible_scale",
+            )
+        if id is None:
+            id = self._next_reference_id("scale")
+        _check_id(id, "scale id")
+        self._scales[id] = _ScaleBinding(id, values)
+        self._used_scale_ids.add(id)
+        self._revision += 1
+        return id
+
+    def _remove_scale(self, id: str) -> None:
+        self._ensure_open()
+        _check_id(id, "scale id")
+        if id not in self._scales:
+            _content_error(f"scale {id!r} is not registered", code="missing_scale")
+        del self._scales[id]
+        self._revision += 1
+
+    def _layer_references(self, layer: PlotLayer) -> tuple[str, ...]:
+        result = [
+            f"colorbar:{binding.id}"
+            for binding in self._colorbars.values()
+            if layer in binding.layers
+        ]
+        result.extend(
+            f"scale:{binding.id}"
+            for binding in self._scales.values()
+            if layer in binding.layers
+        )
+        return tuple(result)
 
     def validate(self, *, complete: bool = False):
         self._ensure_open()
@@ -762,12 +977,20 @@ class _PanelImpl:
         generation = self._generation + 1
         temporary: Figure | None = None
         try:
+            layers = tuple(
+                layer
+                for chart in self._charts.values()
+                for layer in chart._layers.values()
+            )
+            prepared = {layer: _prepare_layer(layer) for layer in layers}
+            resolved_styles = _resolve_render_styles(layers, prepared, self._scales)
             temporary = plt.figure(
                 figsize=effective.layout.figsize,
                 dpi=effective.layout.dpi,
                 facecolor=effective.theme.figure_facecolor,
             )
             chart_boxes = _chart_boxes(temporary, effective, self._charts)
+            slot_boxes = _slot_boxes(temporary, effective)
             rendered_subplots: dict[Chart, Mapping[str, Subplot]] = {}
             rendered_results: dict[PlotLayer, Mapping[str, LayerResult]] = {}
             for chart in self._charts.values():
@@ -780,14 +1003,6 @@ class _PanelImpl:
                     generation,
                 )
                 rendered_subplots[chart] = runtime_subplots
-                if chart._titles:
-                    # The default title is the first registered title; D07
-                    # will expand this to configured title scopes.
-                    runtime_subplots["main"]._ax.set_title(
-                        next(reversed(chart._titles.values())),
-                        fontsize=spec.theme.title_fontsize,
-                        color=spec.theme.text_color,
-                    )
                 for layer in sorted(chart._layers.values(), key=lambda item: item.zorder):
                     targets = self._validate_layer_against_spec(layer, spec)
                     layer_results: dict[str, LayerResult] = {}
@@ -800,18 +1015,43 @@ class _PanelImpl:
                                 code="missing_target",
                                 path=("charts", chart.id, "subplots", target),
                             ) from exc
-                        artist, mappable = _draw_layer(ax, layer)
+                        artist, mappable = _draw_layer(
+                            ax,
+                            layer,
+                            map_axis=spec.subplots[target].kind == "map",
+                            data_crs=layer.data_crs,
+                            style=resolved_styles[layer],
+                            prepared=prepared[layer],
+                        )
                         layer_results[target] = LayerResult(
                             artists=(artist,), mappable=mappable, generation=generation,
                         )
                     rendered_results[layer] = layer_results
-            if hasattr(self, "_panel_titles") and self._panel_titles:
-                temporary.suptitle(
-                    next(reversed(self._panel_titles.values())),
-                    fontsize=effective.theme.title_fontsize,
-                    color=effective.theme.text_color,
-                )
+            _render_titles(
+                temporary,
+                effective,
+                self._charts,
+                chart_boxes,
+                rendered_subplots,
+                self._panel_titles,
+                slot_boxes,
+            )
+            rendered_colorbars = _render_colorbars(
+                temporary,
+                effective,
+                self._colorbars,
+                rendered_results,
+                resolved_styles,
+                chart_boxes,
+                rendered_subplots,
+                slot_boxes,
+            )
             temporary.canvas.draw()
+        except RenderError:
+            if temporary is not None:
+                plt.close(temporary)
+            self._force_failed = force
+            raise
         except (ConfigError, ContentError):
             if temporary is not None:
                 plt.close(temporary)
@@ -827,6 +1067,7 @@ class _PanelImpl:
         self._generation = generation
         self._rendered_revision = self._revision
         self._force_failed = False
+        self._rendered_colorbars = rendered_colorbars
         for chart, subplots in rendered_subplots.items():
             chart._set_subplots(subplots)
         for layer, results in rendered_results.items():
@@ -874,6 +1115,10 @@ class _PanelImpl:
         for chart in self._charts.values():
             chart._close()
         self._charts.clear()
+        self._colorbars.clear()
+        self._scales.clear()
+        self._rendered_colorbars.clear()
+        self._panel_titles.clear()
         self._closed = True
 
     def __enter__(self) -> "_PanelImpl":
@@ -897,18 +1142,540 @@ def _field_xy(data: xr.DataArray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     return x, y, values
 
 
+def _prepare_layer(layer: PlotLayer) -> Any:
+    """Materialise one logical layer exactly once for a render transaction."""
+
+    if layer.method in {"contourf", "contour"}:
+        x, y, values = _field_xy(layer.data)
+        _validate_expected_units(layer.style, (layer.data,))
+        return x, y, values
+    u, v = layer.data
+    ux, uy, u_values = _field_xy(u)
+    vx, vy, v_values = _field_xy(v)
+    if u_values.shape != v_values.shape or not np.array_equal(ux, vx) or not np.array_equal(uy, vy):
+        _content_error("barb components must have matching shapes and coordinates", code="invalid_data")
+    _validate_expected_units(layer.style, (u, v))
+    return ux, uy, u_values, v_values
+
+
+def _validate_expected_units(style: Style, data_values: Sequence[xr.DataArray]) -> None:
+    expected = getattr(style, "expected_units", None)
+    if expected is None:
+        return
+    units = [item.attrs.get("units") for item in data_values]
+    if any(unit != expected for unit in units):
+        _content_error(
+            f"style expects units {expected!r}, got {units!r}",
+            code="unit_mismatch",
+        )
+
+
+def _finite_values(prepared: Any) -> np.ndarray:
+    if len(prepared) == 3:
+        values = prepared[2]
+    else:
+        values = np.concatenate((np.asarray(prepared[2]).ravel(), np.asarray(prepared[3]).ravel()))
+    result = np.asarray(values, dtype=float)
+    return result[np.isfinite(result)]
+
+
+def _levels_for_values(values: np.ndarray, rule: LevelStep) -> tuple[float, ...]:
+    finite = np.asarray(values, dtype=float)
+    finite = finite[np.isfinite(finite)]
+    if finite.size == 0:
+        _content_error("data-driven levels require at least one finite value", code="invalid_levels")
+    step = rule.step
+    reference = rule.reference
+    lower = reference + math.floor((float(finite.min()) - reference) / step) * step
+    upper = reference + math.ceil((float(finite.max()) - reference) / step) * step
+    if math.isclose(lower, upper, rel_tol=0.0, abs_tol=step * 1e-12):
+        lower -= step
+        upper += step
+    values = np.arange(lower, upper + step * 0.5, step, dtype=float)
+    if values.size < 2:
+        values = np.array((lower, lower + step), dtype=float)
+    return tuple(float(value) for value in values)
+
+
+def _resolved_style(layer: PlotLayer, prepared: Any, values: np.ndarray | None = None) -> Style:
+    style = _copy_style(layer.style)
+    if isinstance(style, ContourStyle) and isinstance(style.levels, LevelStep):
+        style.levels = _levels_for_values(_finite_values(prepared) if values is None else values, style.levels)
+    if isinstance(style, ContourStyle) and style.levels is not None:
+        levels = np.asarray(style.levels, dtype=float)
+        if levels.ndim != 1 or len(levels) < 2 or not np.all(np.isfinite(levels)):
+            _content_error("contour levels must contain at least two finite values", code="invalid_levels")
+        if style.norm == "log" and np.any(levels <= 0):
+            _content_error("log contour levels must be positive", code="invalid_levels")
+    return style
+
+
+def _style_scale_signature(style: Style) -> tuple[Any, ...]:
+    if not isinstance(style, ContourStyle):
+        return (type(style).__name__,)
+    levels = style.levels
+    if isinstance(levels, LevelStep):
+        level_signature = ("step", levels.step, levels.reference)
+    elif levels is None:
+        level_signature = None
+    else:
+        level_signature = tuple(float(item) for item in np.asarray(levels).ravel())
+    colors = style.colors
+    if isinstance(colors, mcolors.Colormap):
+        color_signature = (
+            "cmap",
+            colors.name,
+            tuple(np.asarray(colors(np.linspace(0, 1, min(colors.N, 16)))).ravel()),
+            tuple(colors.get_under()),
+            tuple(colors.get_over()),
+            tuple(colors.get_bad()),
+        )
+    elif isinstance(colors, (list, tuple, np.ndarray)):
+        color_signature = ("colors", tuple(repr(item) for item in colors))
+    else:
+        color_signature = ("color", colors)
+    return (
+        "contour",
+        level_signature,
+        style.norm,
+        color_signature,
+        style.extend,
+        style.expected_units,
+    )
+
+
+def _data_metadata(layers: Sequence[PlotLayer]) -> tuple[tuple[Any, ...], tuple[Any, ...]]:
+    units: list[Any] = []
+    standard_names: list[Any] = []
+    for layer in layers:
+        values = layer.data if layer.method != "barbs" else layer.data
+        arrays = values if layer.method == "barbs" else (values,)
+        units.extend(item.attrs.get("units") for item in arrays)
+        standard_names.extend(item.attrs.get("standard_name") for item in arrays)
+    return tuple(units), tuple(standard_names)
+
+
+def _validate_scale_layers(layers: Sequence[PlotLayer], *, context: str) -> None:
+    if any(layer.method == "barbs" for layer in layers):
+        _content_error(f"{context} cannot include barb layers", code="incompatible_scale")
+    signatures = {_style_scale_signature(layer.style) for layer in layers}
+    if len(signatures) != 1:
+        _content_error(
+            f"{context} layers must use identical levels, norm, cmap and extend",
+            code="incompatible_scale",
+        )
+    units, standard_names = _data_metadata(layers)
+    if len(layers) > 1:
+        if any(unit is None for unit in units) or len(set(units)) != 1:
+            _content_error(f"{context} layers must declare matching units", code="incompatible_scale")
+        if any(not name for name in standard_names) or len(set(standard_names)) != 1:
+            _content_error(
+                f"{context} layers must declare the same standard_name",
+                code="incompatible_scale",
+            )
+
+
+def _validate_colorbar_target(layer: PlotLayer, spec: ChartSpec, target: str) -> tuple[str, ...]:
+    if target != "all" and target not in _layer_targets(layer, spec):
+        _content_error(
+            f"colorbar target {target!r} is not rendered by layer {layer.id!r}",
+            code="missing_target",
+        )
+    return _layer_targets(layer, spec) if target == "all" else (target,)
+
+
+def _resolve_render_styles(
+    layers: Sequence[PlotLayer],
+    prepared: Mapping[PlotLayer, Any],
+    scales: Mapping[str, _ScaleBinding],
+) -> dict[PlotLayer, Style]:
+    resolved: dict[PlotLayer, Style] = {}
+    grouped: set[PlotLayer] = set()
+    for binding in scales.values():
+        grouped.update(binding.layers)
+        combined = np.concatenate([_finite_values(prepared[layer]) for layer in binding.layers])
+        for layer in binding.layers:
+            resolved[layer] = _resolved_style(layer, prepared[layer], combined)
+    for layer in layers:
+        if layer not in grouped:
+            resolved[layer] = _resolved_style(layer, prepared[layer])
+    return resolved
+
+
+def _slot_boxes(figure: Figure, effective: Any) -> dict[str, tuple[float, float, float, float]]:
+    layout = effective.layout
+    if layout.mode == "absolute":
+        return {
+            slot_id: tuple(slot.position.bounds)
+            for slot_id, slot in layout.slots.items()
+            if slot.enabled and isinstance(slot.position, Rect)
+        }
+    grid = figure.add_gridspec(
+        layout.rows,
+        layout.columns,
+        left=layout.margins[0],
+        right=1 - layout.margins[1],
+        bottom=layout.margins[2],
+        top=1 - layout.margins[3],
+        wspace=layout.wspace,
+        hspace=layout.hspace,
+    )
+    bottoms, tops, lefts, rights = grid.get_grid_positions(figure)
+    result: dict[str, tuple[float, float, float, float]] = {}
+    for slot_id, slot in layout.slots.items():
+        if not slot.enabled or not isinstance(slot.position, Cell):
+            continue
+        top, left, bottom, right = _cell_bounds(slot.position)
+        result[slot_id] = (
+            float(lefts[left]),
+            float(bottoms[bottom - 1]),
+            float(rights[right - 1] - lefts[left]),
+            float(tops[top] - bottoms[bottom - 1]),
+        )
+    return result
+
+
+def _bounds_in_unit_square(bounds: tuple[float, float, float, float]) -> bool:
+    left, bottom, width, height = bounds
+    return 0 <= left <= 1 and 0 <= bottom <= 1 and left + width <= 1 and bottom + height <= 1
+
+
+def _decoration_mapping(owner: Chart | None, effective: Any, name: str) -> Mapping[str, Any]:
+    if owner is None:
+        decorations = effective.decorations
+    else:
+        decorations = effective.charts[owner.id].decorations
+    value = getattr(decorations, name)
+    return {} if value is UNSET else value
+
+
+def _position_point(
+    position: TextPosition,
+    *,
+    figure: Figure,
+    chart_box: tuple[float, float, float, float] | None,
+    subplots: Mapping[str, Subplot] | None,
+    slot_boxes: Mapping[str, tuple[float, float, float, float]],
+    owner: Chart | None,
+) -> tuple[str, Any, float, float]:
+    space = position.space
+    x, y = position.xy
+    if space == "figure":
+        return "figure", None, x, y
+    if space == "chart":
+        if chart_box is None:
+            raise ConfigError("chart-space decoration requires a Chart", code="invalid_decoration")
+        left, bottom, width, height = chart_box
+        return "figure", None, left + x * width, bottom + y * height
+    if space == "slot":
+        slot_id = position.slot
+        if slot_id is UNSET or slot_id is None or slot_id not in slot_boxes:
+            raise ConfigError(
+                f"decoration references missing slot {slot_id!r}",
+                code="missing_target",
+            )
+        left, bottom, width, height = slot_boxes[slot_id]
+        return "figure", None, left + x * width, bottom + y * height
+    if subplots is None:
+        raise ConfigError("subplot-space decoration requires a Chart", code="invalid_decoration")
+    subplot_id = "main" if position.subplot in (UNSET, None) else position.subplot
+    try:
+        return "subplot", subplots[subplot_id]._ax, x, y
+    except KeyError as exc:
+        raise ConfigError(
+            f"decoration references missing subplot {subplot_id!r}",
+            code="missing_target",
+        ) from exc
+
+
+def _rect_box(
+    position: Rect,
+    *,
+    chart_box: tuple[float, float, float, float] | None,
+    subplots: Mapping[str, Subplot] | None,
+    slot_boxes: Mapping[str, tuple[float, float, float, float]],
+) -> tuple[float, float, float, float]:
+    if position.space == "figure":
+        if not _bounds_in_unit_square(position.bounds):
+            raise ConfigError("figure decoration Rect must stay within [0, 1]", code="layout_bounds")
+        return tuple(position.bounds)
+    if position.space == "chart":
+        if chart_box is None:
+            raise ConfigError("chart-space decoration requires a Chart", code="invalid_decoration")
+        return _relative_box(chart_box, position.bounds, path=("decorations",))
+    if position.space == "slot":
+        slot_id = position.slot
+        if slot_id is UNSET or slot_id is None or slot_id not in slot_boxes:
+            raise ConfigError(f"decoration references missing slot {slot_id!r}", code="missing_target")
+        return _relative_box(slot_boxes[slot_id], position.bounds, path=("decorations",))
+    if subplots is None:
+        raise ConfigError("subplot-space decoration requires a Chart", code="invalid_decoration")
+    subplot_id = position.subplot
+    if subplot_id is UNSET or subplot_id is None or subplot_id not in subplots:
+        raise ConfigError(f"decoration references missing subplot {subplot_id!r}", code="missing_target")
+    return _relative_box(
+        subplots[subplot_id]._ax.get_position().bounds,
+        position.bounds,
+        path=("decorations",),
+    )
+
+
+def _render_one_title(
+    figure: Figure,
+    text: str,
+    title: TitleSpec | None,
+    *,
+    owner: Chart | None,
+    theme: Theme,
+    chart_box: tuple[float, float, float, float] | None,
+    subplots: Mapping[str, Subplot] | None,
+    slot_boxes: Mapping[str, tuple[float, float, float, float]],
+) -> None:
+    title = title or TitleSpec()
+    if title.enabled is False:
+        return
+    position = title.position
+    if not isinstance(position, (TextPosition, Rect)):
+        position = (
+            TextPosition(space="figure", xy=(.5, .98), va="top")
+            if owner is None
+            else TextPosition(space="subplot", subplot="main", xy=(.5, 1.02), va="bottom")
+        )
+    fontsize = theme.title_fontsize if title.fontsize is UNSET else title.fontsize
+    color = theme.text_color if title.color is UNSET else title.color
+    if isinstance(position, Rect):
+        left, bottom, width, height = _rect_box(
+            position,
+            chart_box=chart_box,
+            subplots=subplots,
+            slot_boxes=slot_boxes,
+        )
+        figure.text(
+            left + width / 2,
+            bottom + height / 2,
+            text,
+            ha="center",
+            va="center",
+            fontsize=fontsize,
+            color=color,
+            fontfamily=theme.font_family,
+        )
+        return
+    kind, ax, x, y = _position_point(
+        position,
+        figure=figure,
+        chart_box=chart_box,
+        subplots=subplots,
+        slot_boxes=slot_boxes,
+        owner=owner,
+    )
+    kwargs = dict(
+        ha="center" if position.ha is UNSET else position.ha,
+        va="bottom" if position.va is UNSET else position.va,
+        fontsize=fontsize,
+        color=color,
+        fontfamily=theme.font_family,
+    )
+    if kind == "figure":
+        figure.text(x, y, text, **kwargs)
+    else:
+        ax.text(x, y, text, transform=ax.transAxes, clip_on=False, **kwargs)
+
+
+def _render_titles(
+    figure: Figure,
+    effective: Any,
+    charts: Mapping[str, Chart],
+    chart_boxes: Mapping[str, tuple[float, float, float, float]],
+    rendered_subplots: Mapping[Chart, Mapping[str, Subplot]],
+    panel_titles: Mapping[str, str],
+    slot_boxes: Mapping[str, tuple[float, float, float, float]],
+) -> None:
+    panel_specs = _decoration_mapping(None, effective, "titles")
+    for title_id, text in panel_titles.items():
+        _render_one_title(
+            figure,
+            text,
+            panel_specs.get(title_id),
+            owner=None,
+            theme=effective.theme,
+            chart_box=None,
+            subplots=None,
+            slot_boxes=slot_boxes,
+        )
+    for chart in charts.values():
+        chart_specs = _decoration_mapping(chart, effective, "titles")
+        for title_id, text in chart._titles.items():
+            spec = effective.charts[chart.id]
+            _render_one_title(
+                figure,
+                text,
+                chart_specs.get(title_id),
+                owner=chart,
+                theme=spec.theme,
+                chart_box=chart_boxes[chart.id],
+                subplots=rendered_subplots[chart],
+                slot_boxes=slot_boxes,
+            )
+
+
+def _mappable_signature(mappable: Any) -> tuple[Any, ...]:
+    norm = mappable.norm
+    boundaries = getattr(norm, "boundaries", None)
+    if boundaries is not None:
+        boundaries = tuple(float(item) for item in boundaries)
+    cmap = mappable.cmap
+    return (
+        type(norm).__name__,
+        getattr(norm, "vmin", None),
+        getattr(norm, "vmax", None),
+        boundaries,
+        cmap.name,
+        tuple(cmap.get_under()),
+        tuple(cmap.get_over()),
+        tuple(cmap.get_bad()),
+    )
+
+
+def _colorbar_candidates(
+    binding: _ColorbarBinding,
+    effective: Any,
+    rendered_results: Mapping[PlotLayer, Mapping[str, LayerResult]],
+) -> list[tuple[PlotLayer, str, Any]]:
+    candidates: list[tuple[PlotLayer, str, Any]] = []
+    for layer in binding.layers:
+        spec = effective.charts[layer.chart.id]
+        targets = _validate_colorbar_target(layer, spec, binding.subplots)
+        for target in targets:
+            result = rendered_results[layer].get(target)
+            if result is None or result.mappable is None:
+                _content_error(
+                    f"colorbar {binding.id!r} layer {layer.id!r} target {target!r} has no mappable",
+                    code="invalid_colorbar",
+                )
+            candidates.append((layer, target, result.mappable))
+    if not candidates:
+        _content_error(f"colorbar {binding.id!r} has no mappable results", code="invalid_colorbar")
+    return candidates
+
+
+def _render_colorbars(
+    figure: Figure,
+    effective: Any,
+    bindings: Mapping[str, _ColorbarBinding],
+    rendered_results: Mapping[PlotLayer, Mapping[str, LayerResult]],
+    resolved_styles: Mapping[PlotLayer, Style],
+    chart_boxes: Mapping[str, tuple[float, float, float, float]],
+    rendered_subplots: Mapping[Chart, Mapping[str, Subplot]],
+    slot_boxes: Mapping[str, tuple[float, float, float, float]],
+) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for binding in bindings.values():
+        candidates = _colorbar_candidates(binding, effective, rendered_results)
+        first_layer, first_target, first_mappable = candidates[0]
+        first_units = first_layer.data.attrs.get("units")
+        first_standard_name = first_layer.data.attrs.get("standard_name")
+        baseline = (
+            _style_scale_signature(resolved_styles[first_layer]),
+            _mappable_signature(first_mappable),
+            first_units,
+            first_standard_name,
+        )
+        differing: set[str] = set()
+        for layer, target, mappable in candidates[1:]:
+            units = layer.data.attrs.get("units")
+            standard_name = layer.data.attrs.get("standard_name")
+            current = (
+                _style_scale_signature(resolved_styles[layer]),
+                _mappable_signature(mappable),
+                units,
+                standard_name,
+            )
+            names = ("levels/norm/cmap/extend", "mappable", "units", "standard_name")
+            differing.update(name for name, left, right in zip(names, baseline, current) if left != right)
+        if len({layer for layer, _, _ in candidates}) > 1:
+            units = [layer.data.attrs.get("units") for layer, _, _ in candidates]
+            names = [layer.data.attrs.get("standard_name") for layer, _, _ in candidates]
+            if any(value is None for value in units) or len(set(units)) != 1:
+                differing.add("units")
+            if any(not value for value in names) or len(set(names)) != 1:
+                differing.add("standard_name")
+        if differing:
+            _content_error(
+                f"colorbar={binding.id!r} has incompatible layers; differing={sorted(differing)!r}",
+                code="incompatible_scale",
+            )
+        owner = binding.owner
+        decoration = _decoration_mapping(owner, effective, "colorbars").get(binding.id)
+        decoration = decoration or ColorbarSpec()
+        orientation = "vertical" if decoration.orientation is UNSET else decoration.orientation
+        ticks = None if decoration.ticks is UNSET else decoration.ticks
+        if decoration.enabled is False:
+            result[binding.id] = None
+            continue
+        if owner is None:
+            theme = effective.theme
+            chart_box = None
+            subplots = None
+        else:
+            theme = effective.charts[owner.id].theme
+            chart_box = chart_boxes[owner.id]
+            subplots = rendered_subplots[owner]
+        position = decoration.position
+        if not isinstance(position, (Rect, TextPosition)):
+            position = (
+                Rect(space="figure", bounds=(.92, .15, .02, .7))
+                if owner is None
+                else Rect(space="chart", bounds=(.87, .12, .025, .76))
+            )
+        if isinstance(position, TextPosition):
+            _, _, x, y = _position_point(
+                position,
+                figure=figure,
+                chart_box=chart_box,
+                subplots=subplots,
+                slot_boxes=slot_boxes,
+                owner=owner,
+            )
+            width, height = (.025, .7) if orientation == "vertical" else (.7, .025)
+            position = Rect(space="figure", bounds=(x - width / 2, y - height / 2, width, height))
+        box = _rect_box(
+            position,
+            chart_box=chart_box,
+            subplots=subplots,
+            slot_boxes=slot_boxes,
+        )
+        cax = figure.add_axes(box)
+        colorbar = figure.colorbar(
+            first_mappable,
+            cax=cax,
+            orientation=orientation,
+        )
+        if binding.label is not None:
+            colorbar.set_label(binding.label)
+        if ticks is not None:
+            colorbar.set_ticks(ticks)
+        tick_fontsize = theme.tick_fontsize if decoration.tick_fontsize is UNSET else decoration.tick_fontsize
+        colorbar.ax.tick_params(labelsize=tick_fontsize)
+        result[binding.id] = colorbar
+    return result
+
+
 def _draw_layer(
     ax: Any,
     layer: PlotLayer,
     *,
     map_axis: bool = False,
     data_crs: Any = None,
+    style: Style | None = None,
+    prepared: Any = None,
 ) -> tuple[Artist, Any]:
-    data = layer.data
-    style = layer.style
+    style = layer.style if style is None else style
+    if prepared is None:
+        prepared = _prepare_layer(layer)
     transform = {"transform": data_crs} if map_axis else {}
     if layer.method in {"contourf", "contour"}:
-        x, y, values = _field_xy(data)
+        x, y, values = prepared
         kwargs: dict[str, Any] = {"zorder": layer.zorder, **transform}
         if style.levels is not None:
             kwargs["levels"] = style.levels
@@ -916,8 +1683,16 @@ def _draw_layer(
             kwargs["linewidths"] = style.linewidths
         if style.linestyles is not None:
             kwargs["linestyles"] = style.linestyles
+        if style.levels is not None and getattr(style, "norm", "boundary") == "linear":
+            kwargs["norm"] = mcolors.Normalize(vmin=style.levels[0], vmax=style.levels[-1])
+        elif style.levels is not None and getattr(style, "norm", "boundary") == "log":
+            kwargs["norm"] = mcolors.LogNorm(vmin=style.levels[0], vmax=style.levels[-1])
+        elif style.levels is not None and getattr(style, "norm", "boundary") == "boundary":
+            kwargs["norm"] = mcolors.BoundaryNorm(style.levels, ncolors=256, clip=False)
         colors = style.colors
         if layer.method == "contourf":
+            if getattr(style, "extend", "neither") != "neither":
+                kwargs["extend"] = style.extend
             if isinstance(colors, (str, mcolors.Colormap)):
                 kwargs["cmap"] = colors
             elif colors is not None:
@@ -930,11 +1705,7 @@ def _draw_layer(
             kwargs["colors"] = colors
         result = ax.contour(x, y, values, **kwargs)
         return result, result
-    u, v = data
-    x, y, u_values = _field_xy(u)
-    _, _, v_values = _field_xy(v)
-    if u_values.shape != v_values.shape:
-        _content_error("barb components must have matching shapes", code="invalid_data")
+    x, y, u_values, v_values = prepared
     xx, yy = np.meshgrid(x, y)
     result = ax.barbs(
         xx, yy, u_values, v_values,
@@ -1473,6 +2244,39 @@ class Panel:
         if text is UNSET:
             raise TypeError("new set_title requires text")
         return self._impl._set_title(None, text, id=id)
+
+    def colorbar(
+        self,
+        layers: PlotLayer | Sequence[PlotLayer],
+        *,
+        id: str | None = None,
+        subplots: str = "main",
+        label: str | None = None,
+    ) -> str:
+        if self._legacy is not None:
+            raise ConfigError("colorbar is unavailable for the legacy domain API", code="legacy_api")
+        return self._impl._register_colorbar(
+            None,
+            layers,
+            id=id,
+            subplots=subplots,
+            label=label,
+        )
+
+    def remove_colorbar(self, id: str) -> None:
+        if self._legacy is not None:
+            raise ConfigError("remove_colorbar is unavailable for the legacy domain API", code="legacy_api")
+        return self._impl._remove_colorbar(id)
+
+    def share_scale(self, layers: PlotLayer | Sequence[PlotLayer], *, id: str | None = None) -> str:
+        if self._legacy is not None:
+            raise ConfigError("share_scale is unavailable for the legacy domain API", code="legacy_api")
+        return self._impl._register_scale(layers, id=id)
+
+    def remove_scale(self, id: str) -> None:
+        if self._legacy is not None:
+            raise ConfigError("remove_scale is unavailable for the legacy domain API", code="legacy_api")
+        return self._impl._remove_scale(id)
 
     @property
     def charts(self) -> Mapping[str, Chart]:
