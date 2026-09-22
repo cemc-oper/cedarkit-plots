@@ -15,6 +15,8 @@ _LAZY_EXPORTS = {
     "GlobalAreaMapTemplate": (".global_template", "GlobalAreaMapTemplate"),
     "EnsCNMapTemplate": (".ens_cn", "EnsCNMapTemplate"),
     "TimeStepAndLevelXYTemplate": (".time_profile_template", "TimeStepAndLevelXYTemplate"),
+    "EAST_ASIA_DOMAIN": (".east_asia_config", "EAST_ASIA_DOMAIN"),
+    "SOUTH_CHINA_SEA_DOMAIN": (".east_asia_config", "SOUTH_CHINA_SEA_DOMAIN"),
 }
 
 
@@ -53,6 +55,7 @@ def __getattr__(name):
 __all__ = [
     "CnAreaMapTemplate",
     "Domain",
+    "EAST_ASIA_DOMAIN",
     "EastAsiaMapTemplate",
     "EnsCNMapTemplate",
     "EuropeAsiaMapTemplate",
@@ -61,5 +64,6 @@ __all__ = [
     "MapTemplate",
     "NorthPolarMapTemplate",
     "SubMapConfig",
+    "SOUTH_CHINA_SEA_DOMAIN",
     "TimeStepAndLevelXYTemplate",
 ]

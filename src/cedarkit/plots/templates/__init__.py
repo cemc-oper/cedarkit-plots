@@ -109,4 +109,7 @@ class PanelTemplate:
             object.__setattr__(self, "chart_rules", rules)
 
 
-__all__ = ["ChartTemplate", "PanelTemplate"]
+from .east_asia import east_asia, east_asia_chart
+
+
+__all__ = ["ChartTemplate", "PanelTemplate", "east_asia", "east_asia_chart"]

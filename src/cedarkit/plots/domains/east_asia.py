@@ -14,42 +14,17 @@ from cedarkit.plots.painter.presets import (
 
 from .layout import LayoutConfig
 from .map_template import MapTemplate, SubMapConfig
+from .east_asia_config import (
+    EAST_ASIA_AREA,
+    EAST_ASIA_DOMAIN,
+    EAST_ASIA_MAP_INFO,
+    SOUTH_CHINA_SEA_AREA,
+    SOUTH_CHINA_SEA_DOMAIN,
+    SOUTH_CHINA_SEA_MAP_INFO,
+)
 
 if TYPE_CHECKING:
     from cedarkit.plots.chart import Chart, Panel
-
-
-#: 东亚默认区域（70°E–140°E, 15°N–55°N）
-EAST_ASIA_AREA = AreaRange(
-    start_longitude=70,
-    end_longitude=140,
-    start_latitude=15,
-    end_latitude=55,
-)
-
-#: 南海子图区域（105°E–123°E, 2°N–23°N）
-SOUTH_CHINA_SEA_AREA = AreaRange(
-    start_longitude=105,
-    end_longitude=123,
-    start_latitude=2,
-    end_latitude=23,
-)
-
-#: 主图默认地图信息标注（含审图号）。
-#: 审图号 GS (2019) 1786 为 CEMC 业务约定：依据自然资源部标准地图
-#: 编制业务用图时须标注对应审图号；非业务出图可通过构造参数替换或置空。
-EAST_ASIA_MAP_INFO = MapInfo(
-    x=0.998,
-    y=0.0022,
-    text="Scale 1:20000000 No:GS (2019) 1786",
-)
-
-#: 南海子图默认地图信息标注（CEMC 业务约定，无审图号）。
-SOUTH_CHINA_SEA_MAP_INFO = MapInfo(
-    x=0.99,
-    y=0.01,
-    text="Scale 1:40000000",
-)
 
 
 class EastAsiaMapTemplate(MapTemplate):
