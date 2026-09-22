@@ -25,3 +25,4 @@ styles:
       palette: cemc.cin.cn
     fill: true
     extend: both
+    expected_units: J/kg

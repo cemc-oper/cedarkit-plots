@@ -129,10 +129,14 @@ highlight:
 ### 单位与累计时段
 
 `expected_units` 声明已准备数据的规范单位，匹配和显式解析读取
-`attrs["units"]`，不相等或缺失即报错；没有声明时不猜源单位。
+`attrs["units"]`，支持的别名仅作规范化，单位不同或缺失即报错；没有声明时不猜源单位。
+`expected_temperature_kind: absolute|difference` 校验同名数据语义
+`attrs["temperature_kind"]`，区分绝对温度与温差；不从样式推断输入语义。
 `accumulation_hours` 为有限正数，声明累计量实际覆盖的小时数，读取
 同名 attrs，不从预报时效 `step` 或产品名称推断。两项约束会进入 Style
 快照，在登记、更新和渲染时校验；不执行转换或时间差分。
+显式转换使用 [数据准备接口](./units.md)，返回新数组与转换记录。
+CEMC 全部变体已声明单位；降水变体还声明累计时段，`get_style` 必须收到对应 metadata/data。
 旧 `units/get_transform/style_units` 暂由尚未迁移的 workflow 使用，D13 删除。
 
 ## profile 加载与优先级

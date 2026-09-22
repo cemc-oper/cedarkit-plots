@@ -21,6 +21,8 @@ styles:
     colorbar:
       label: rain
     extend: both
+    expected_units: mm
+    accumulation_hours: 24
   cn_prep:
     type: contour
     levels:
@@ -36,6 +38,8 @@ styles:
     colorbar:
       label: rain
     extend: both
+    expected_units: mm
+    accumulation_hours: 24
   cn_1h:
     type: contour
     levels:
@@ -52,6 +56,8 @@ styles:
       palette: cemc.rain.cn_1h
     fill: true
     extend: both
+    expected_units: mm
+    accumulation_hours: 1
   cn_3h:
     type: contour
     levels:
@@ -65,6 +71,8 @@ styles:
       palette: cemc.rain.cn_3h
     fill: true
     extend: both
+    expected_units: mm
+    accumulation_hours: 3
   cn_6h:
     type: contour
     levels:
@@ -77,6 +85,8 @@ styles:
       palette: cemc.rain.cn_6h
     fill: true
     extend: both
+    expected_units: mm
+    accumulation_hours: 6
   cn_12h:
     type: contour
     levels:
@@ -90,6 +100,8 @@ styles:
       palette: cemc.rain.cn_12h
     fill: true
     extend: both
+    expected_units: mm
+    accumulation_hours: 12
   cn_24h:
     type: contour
     levels:
@@ -103,3 +115,5 @@ styles:
       palette: cemc.rain.cn_24h
     fill: true
     extend: both
+    expected_units: mm
+    accumulation_hours: 24

@@ -13,8 +13,10 @@ styles:
       palette: cemc.shr.cn_fill
     fill: true
     extend: both
+    expected_units: m/s
   cn_line:
     type: contour
     colormap:
       palette: cemc.shr.cn_line
     linewidth: 0.3
+    expected_units: m/s

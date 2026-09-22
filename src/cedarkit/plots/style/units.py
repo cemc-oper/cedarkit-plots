@@ -1,4 +1,7 @@
-"""Built-in unit conversion table for the style library.
+"""Legacy style-driven conversions, pending removal with the D13 engine.
+
+New Style/Chart paths never use this table. Explicit data preparation uses
+cedarkit.plots.units; do not add new conversions here.
 
 The table is intentionally small and explicit; no pint integration.
 A style YAML ``units`` entry declares the *target* unit of the plot;

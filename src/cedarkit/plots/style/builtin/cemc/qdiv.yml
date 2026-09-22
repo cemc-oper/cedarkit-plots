@@ -17,6 +17,7 @@ styles:
       palette: cemc.qdiv.cn_fill
     fill: true
     extend: both
+    expected_units: 10^-7 g/(hPa cm^2 s)
   cn_line:
     type: contour
     levels:
@@ -28,3 +29,4 @@ styles:
       palette: cemc.qdiv.cn_line
     linewidth: 0.2
     linestyles: '-'
+    expected_units: 10^-7 g/(hPa cm^2 s)

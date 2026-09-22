@@ -22,6 +22,8 @@ styles:
       palette: cemc.bli.cn_fill
     fill: true
     extend: both
+    expected_units: K
+    expected_temperature_kind: difference
   cn_line:
     type: contour
     levels:
@@ -40,3 +42,5 @@ styles:
     label:
       fontsize: 7
       background_color: white
+    expected_units: K
+    expected_temperature_kind: difference

@@ -18,6 +18,7 @@ import yaml
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from .units import UNIT_TRANSFORMS
+from cedarkit.plots.units import canonical_unit, validate_temperature_kind
 
 
 # GRIB2 code table 4.5: fixed surface type code -> ecCodes typeOfLevel name.
@@ -249,8 +250,14 @@ class StyleVariant(StrictModel):
     units: Optional[str] = None
     # v2 data values are already converted; styles only state their contract.
     expected_units: Optional[str] = None
+    expected_temperature_kind: Optional[Literal["absolute", "difference"]] = None
     # Duration of the already prepared accumulation, never forecast lead time.
     accumulation_hours: Optional[float] = Field(default=None, gt=0, allow_inf_nan=False)
+
+    @field_validator("expected_units")
+    @classmethod
+    def canonical_expected_units(cls, value: Optional[str]) -> Optional[str]:
+        return canonical_unit(value) if value is not None else None
 
     @field_validator("units")
     @classmethod
@@ -262,6 +269,7 @@ class StyleVariant(StrictModel):
 
     @model_validator(mode="after")
     def check_type_fields(self) -> "StyleVariant":
+        validate_temperature_kind(self.expected_temperature_kind, self.expected_units)
         if isinstance(self.levels, StepLevels) and self.highlight is not None:
             raise ValueError("highlight requires fixed levels, not a dynamic step rule")
         contour_keys = ("colormap", "levels", "linestyles", "label", "highlight", "colorbar")

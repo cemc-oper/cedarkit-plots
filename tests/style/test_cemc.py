@@ -37,6 +37,10 @@ def field(style):
     levels = np.asarray(style.levels)
     values = np.linspace(levels[0] - 1, levels[-1] + 1, 120).reshape(10, 12)
     attrs = {} if style.expected_units is None else {'units': style.expected_units}
+    if style.expected_temperature_kind is not None:
+        attrs['temperature_kind'] = style.expected_temperature_kind
+    if style.accumulation_hours is not None:
+        attrs['accumulation_hours'] = style.accumulation_hours
     return xr.DataArray(values, dims=('y', 'x'), attrs=attrs)
 
 
@@ -55,11 +59,14 @@ def test_every_variant_settings_and_rendered_colors(name, registry):
     _, identifier, variant = name.split('.')
     # Shear levels are supplied by the product; no invented fixed thresholds.
     overrides = {'levels': list(range(16))} if identifier == 'shr' else None
-    style = registry.get_style(identifier, variant, overrides=overrides)
+    duration = registry._lookup(identifier, variant)[3].accumulation_hours
+    metadata = {'units': 'mm', 'accumulation_hours': duration} if duration is not None else None
+    style = registry.get_style(identifier, variant, metadata=metadata, overrides=overrides)
     old = StyleVariant.model_validate(RECIPES[name])
     expected_levels = np.arange(16) if identifier == 'shr' else module.evaluate_levels(old.levels)
     np.testing.assert_array_equal(style.levels, expected_levels)
-    assert style.expected_units == old.expected_units
+    if old.expected_units is not None:
+        assert style.expected_units == old.expected_units
     assert style.fill == old.fill
     assert style.linestyles == old.linestyles
     assert style.label == (old.label is not None)
@@ -121,7 +128,7 @@ def test_labels_and_transparent_feature(registry):
     np.testing.assert_array_equal(dew.colors[zero], [0, 0, 0, 0])
     np.testing.assert_array_equal(dew.label_style.colors, dew.colors)
     for variant in ('cn', 'cn_prep', 'cn_24h'):
-        assert registry.get_style('rain', variant).colors.get_under()[3] == 0
+        assert registry.get_style('rain', variant, metadata={'units': 'mm', 'accumulation_hours': 24}).colors.get_under()[3] == 0
 
 
 def test_native_shared_scale_and_atomic_rejection(registry):
@@ -146,7 +153,7 @@ def test_default_user_override_preserves_other_builtin_ids(tmp_path, registry):
     (user / 't2m.yml').write_text('id: t2m\ncriteria: [{cemc_name: t2m}]\noptimal: local\nstyles:\n  local: {type: contour, colormap: viridis, levels: [0, 1, 2], fill: true}\n')
     overridden = StyleRegistry.default(user_paths=[tmp_path])
     assert overridden.get_style('t2m').colors.name == 'viridis'
-    assert overridden.get_style('rain').fill
+    assert overridden.get_style('rain', metadata={'units': 'mm', 'accumulation_hours': 24}).fill
     with pytest.raises(KeyError):
         overridden.get_style('t2m:cn_summer')
 

@@ -78,6 +78,7 @@ tutorials/synthetic_data
 tutorials/styles
 tutorials/style_library
 tutorials/colormap
+tutorials/units
 tutorials/templates
 tutorials/recipe_v2
 ```

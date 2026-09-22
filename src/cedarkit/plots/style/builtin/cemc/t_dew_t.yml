@@ -24,6 +24,8 @@ styles:
       palette: cemc.t_dew_t.cn_fill
     fill: true
     extend: both
+    expected_units: K
+    expected_temperature_kind: difference
   cn_line:
     type: contour
     levels:
@@ -46,6 +48,8 @@ styles:
     - level: 5
       linewidth: 2.0
       color: '#ff00ffff'
+    expected_units: K
+    expected_temperature_kind: difference
   cn_t:
     type: contour
     levels:
@@ -68,3 +72,5 @@ styles:
     label:
       background_color: white
       line_colors: true
+    expected_units: degC
+    expected_temperature_kind: absolute

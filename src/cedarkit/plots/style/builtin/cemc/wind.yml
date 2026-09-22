@@ -15,3 +15,4 @@ styles:
     barbcolor: black
     flagcolor: black
     linewidth: 0.3
+    expected_units: m/s

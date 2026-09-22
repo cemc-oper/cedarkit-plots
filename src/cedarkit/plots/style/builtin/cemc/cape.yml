@@ -35,6 +35,7 @@ styles:
       palette: cemc.cape.cn_fill
     fill: true
     extend: both
+    expected_units: J/kg
   cn_line:
     type: contour
     levels:
@@ -63,3 +64,4 @@ styles:
     colormap:
       palette: cemc.cape.cn_line
     linewidth: 0.15
+    expected_units: J/kg

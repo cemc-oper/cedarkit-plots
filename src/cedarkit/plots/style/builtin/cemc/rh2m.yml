@@ -17,3 +17,4 @@ styles:
       palette: cemc.rh2m.cn
     fill: true
     extend: both
+    expected_units: '%'

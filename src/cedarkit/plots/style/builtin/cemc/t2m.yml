@@ -32,6 +32,7 @@ styles:
     fill: true
     expected_units: degC
     extend: both
+    expected_temperature_kind: absolute
   cn_winter:
     type: contour
     colormap:
@@ -55,3 +56,4 @@ styles:
     fill: true
     expected_units: degC
     extend: both
+    expected_temperature_kind: absolute

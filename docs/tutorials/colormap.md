@@ -66,7 +66,8 @@ rain_style = ContourStyle(
 ```
 
 显式颜色列表依次对应 under、三个内部区间、over；透明色 alpha 为 0。
-使用完整业务等级时优先 `StyleRegistry.default().get_style("cemc.rain:cn")`。
+使用完整业务等级时优先 `StyleRegistry.default().get_style("cemc.rain:cn",
+metadata={"units": "mm", "accumulation_hours": 24})`。
 原生 palette YAML 的固定填色等级结合 `extend` 编译为内部区间颜色与特殊颜色；
 `get_palette` 本身返回原表，不隐式改变等级或保留扩展位置。
 旧解析器和原始 NCL 文件仅供尚未迁移的下游调用，计划在 D14/D15 删除。

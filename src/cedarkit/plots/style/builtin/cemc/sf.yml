@@ -21,3 +21,5 @@ styles:
     colorbar:
       label: snow
     extend: both
+    expected_units: mm
+    accumulation_hours: 24

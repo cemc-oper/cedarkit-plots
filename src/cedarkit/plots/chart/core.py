@@ -51,6 +51,7 @@ from cedarkit.plots.config import (
 )
 from cedarkit.plots.errors import ClosedError, ContentError, Issue, RenderError, RenderRequiredError
 from cedarkit.plots.painter.component_bindutils import add_map_info_text
+from cedarkit.plots.units import canonical_unit, unit_dimension, validate_temperature_kind
 from cedarkit.plots.style import BarbStyle, ContourLabelStyle, ContourStyle, LevelStep, Style
 
 
@@ -1265,21 +1266,29 @@ def _prepare_layer(layer: PlotLayer) -> Any:
 
 
 def _validate_expected_units(style: Style, data_values: Sequence[xr.DataArray]) -> None:
-    units = [item.attrs.get("units") for item in data_values]
-    declared = {unit for unit in units if unit is not None}
-    if len(declared) > 1:
-        _content_error(f"barb components declare different units: {units!r}", code="unit_mismatch")
+    raw_units = [item.attrs.get("units") for item in data_values]
+    try:
+        units = [canonical_unit(unit) if unit is not None else None for unit in raw_units]
+        for item, unit in zip(data_values, units):
+            validate_temperature_kind(item.attrs.get("temperature_kind"), unit)
+    except ValueError as exc:
+        _content_error(str(exc), code="unit_mismatch")
+    if len(set(units)) > 1:
+        _content_error(f"barb components declare different units: {raw_units!r}", code="unit_mismatch")
+    if isinstance(style, BarbStyle) and any(unit is not None and unit_dimension(unit) != "speed" for unit in units):
+        _content_error("barb components require speed units", code="unit_mismatch")
     duration = getattr(style, "accumulation_hours", None)
-    if duration is not None and any(item.attrs.get("accumulation_hours") != duration for item in data_values):
+    if duration is not None and any(
+        isinstance(item.attrs.get("accumulation_hours"), bool)
+        or item.attrs.get("accumulation_hours") != duration for item in data_values
+    ):
         _content_error(f"style expects accumulation_hours {duration!r}", code="accumulation_mismatch")
     expected = getattr(style, "expected_units", None)
-    if expected is None:
-        return
-    if any(unit != expected for unit in units):
-        _content_error(
-            f"style expects units {expected!r}, got {units!r}",
-            code="unit_mismatch",
-        )
+    if expected is not None and any(unit != canonical_unit(expected) for unit in units):
+        _content_error(f"style expects units {expected!r}, got {raw_units!r}", code="unit_mismatch")
+    kind = getattr(style, "expected_temperature_kind", None)
+    if kind is not None and any(item.attrs.get("temperature_kind") != kind for item in data_values):
+        _content_error(f"style expects temperature_kind {kind!r}", code="unit_mismatch")
 
 
 def _finite_values(prepared: Any) -> np.ndarray:
@@ -1354,6 +1363,7 @@ def _style_scale_signature(style: Style) -> tuple[Any, ...]:
         color_signature,
         style.extend,
         style.expected_units,
+        style.expected_temperature_kind,
         style.accumulation_hours,
     )
 
@@ -1364,7 +1374,10 @@ def _data_metadata(layers: Sequence[PlotLayer]) -> tuple[tuple[Any, ...], tuple[
     for layer in layers:
         values = layer.data if layer.method != "barbs" else layer.data
         arrays = values if layer.method == "barbs" else (values,)
-        units.extend(item.attrs.get("units") for item in arrays)
+        try:
+            units.extend(canonical_unit(item.attrs["units"]) if item.attrs.get("units") is not None else None for item in arrays)
+        except ValueError as exc:
+            _content_error(str(exc), code="unit_mismatch")
         standard_names.extend(item.attrs.get("standard_name") for item in arrays)
     return tuple(units), tuple(standard_names)
 
@@ -1380,6 +1393,9 @@ def _validate_scale_layers(layers: Sequence[PlotLayer], *, context: str) -> None
         )
     units, standard_names = _data_metadata(layers)
     if len(layers) > 1:
+        kinds = {layer.data.attrs.get("temperature_kind") for layer in layers}
+        if len(kinds) > 1:
+            _content_error(f"{context} layers must declare matching temperature_kind", code="incompatible_scale")
         if any(unit is None for unit in units) or len(set(units)) != 1:
             _content_error(f"{context} layers must declare matching units", code="incompatible_scale")
         if any(not name for name in standard_names) or len(set(standard_names)) != 1:

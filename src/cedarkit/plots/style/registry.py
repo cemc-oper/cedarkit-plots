@@ -27,6 +27,7 @@ from .schema import (
     load_style_file,
 )
 from .units import get_unit_transform
+from cedarkit.plots.units import canonical_unit, validate_temperature_kind
 
 
 # ---------------------------------------------------------------------------
@@ -309,7 +310,7 @@ def build_style(
             kwargs["flagcolor"] = variant.flagcolor
         if variant.barb_increments is not None:
             kwargs["barb_increments"] = dict(variant.barb_increments)
-        return BarbStyle(expected_units=variant.expected_units, accumulation_hours=variant.accumulation_hours, **kwargs)
+        return BarbStyle(expected_units=variant.expected_units, expected_temperature_kind=variant.expected_temperature_kind, accumulation_hours=variant.accumulation_hours, **kwargs)
 
     levels = (LevelStep(variant.levels.step, variant.levels.reference)
               if isinstance(variant.levels, StepLevels) else evaluate_levels(variant.levels))
@@ -386,6 +387,7 @@ def build_style(
 
     return ContourStyle(
         expected_units=variant.expected_units,
+        expected_temperature_kind=variant.expected_temperature_kind,
         accumulation_hours=variant.accumulation_hours,
         colors=colors,
         levels=levels,
@@ -435,7 +437,7 @@ def metadata_from_field(field: xr.DataArray) -> Dict[str, Any]:
     """
     metadata: Dict[str, Any] = {}
     attrs = field.attrs
-    for key in ("cemc_name", "eccodes_name", "wgrib2_name", "units", "accumulation_hours"):
+    for key in ("cemc_name", "eccodes_name", "wgrib2_name", "units", "temperature_kind", "accumulation_hours"):
         value = attrs.get(key)
         if value is not None:
             metadata[key] = value
@@ -586,8 +588,21 @@ class StyleRegistry:
     @staticmethod
     def _constraints(variant: StyleVariant, metadata: Mapping[str, Any]) -> List[str]:
         reasons = []
-        for key, expected in (("units", variant.expected_units), ("accumulation_hours", variant.accumulation_hours)):
-            if expected is not None and not _values_equal(expected, metadata.get(key)):
+        try:
+            validate_temperature_kind(metadata.get("temperature_kind"), metadata.get("units"))
+        except ValueError as exc:
+            reasons.append(str(exc))
+        for key, expected in (("units", variant.expected_units),
+                              ("temperature_kind", variant.expected_temperature_kind),
+                              ("accumulation_hours", variant.accumulation_hours)):
+            actual = metadata.get(key)
+            if key == "units" and actual is not None:
+                try:
+                    actual = canonical_unit(actual)
+                except ValueError as exc:
+                    reasons.append(str(exc))
+                    continue
+            if expected is not None and not _values_equal(expected, actual):
                 reasons.append(f"{key}: expected {expected!r}, got {metadata.get(key)!r}")
         return reasons
 
@@ -638,7 +653,7 @@ class StyleRegistry:
                     reasons.append(f"criteria mismatch: {', '.join(mismatches)}")
                 variant = spec.styles.get(spec.optimal)
                 if variant is not None:
-                    score += int(variant.expected_units is not None) + int(variant.accumulation_hours is not None)
+                    score += int(variant.expected_units is not None) + int(variant.accumulation_hours is not None) + int(variant.expected_temperature_kind is not None)
                 if state == "matched":
                     if variant is None:
                         state, reasons = "blocked", ["no optimal variant; select an explicit variant"]
@@ -649,7 +664,7 @@ class StyleRegistry:
                 row = dict(id=f"{p}.{field_id}" + (f":{spec.optimal}" if spec.optimal else ""),
                            source=str(path), tier="user" if user else "base", specificity=score,
                            status=state, reasons=reasons, criteria=conditions,
-                           constraints={"units": variant.expected_units, "accumulation_hours": variant.accumulation_hours}
+                           constraints={"units": variant.expected_units, "temperature_kind": variant.expected_temperature_kind, "accumulation_hours": variant.accumulation_hours}
                            if variant is not None else {})
                 candidates.append(row)
                 if state != "mismatch":

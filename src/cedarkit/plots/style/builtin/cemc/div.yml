@@ -17,6 +17,7 @@ styles:
       palette: cemc.div.cn_fill
     fill: true
     extend: both
+    expected_units: 10^-5 s^-1
   cn_line:
     type: contour
     levels:
@@ -31,3 +32,4 @@ styles:
     label:
       fontsize: 7
       background_color: white
+    expected_units: 10^-5 s^-1

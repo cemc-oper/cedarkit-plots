@@ -5,6 +5,8 @@ import numpy as np
 import matplotlib.colors as mcolors
 import matplotlib.ticker as mticker
 
+from cedarkit.plots.units import canonical_unit, validate_temperature_kind
+
 
 def _validate_accumulation_hours(value):
     if value is not None and (
@@ -74,6 +76,7 @@ class ContourStyle(Style):
     norm: str = "boundary"
     extend: str = "neither"
     expected_units: Optional[str] = None
+    expected_temperature_kind: Optional[str] = None
     accumulation_hours: Optional[float] = None
 
     def __post_init__(self):
@@ -93,8 +96,9 @@ class ContourStyle(Style):
             raise ValueError("ContourStyle.norm must be boundary, linear or log")
         if self.extend not in {"neither", "min", "max", "both"}:
             raise ValueError("ContourStyle.extend must be neither, min, max or both")
-        if self.expected_units is not None and not isinstance(self.expected_units, str):
-            raise TypeError("ContourStyle.expected_units must be a string or None")
+        if self.expected_units is not None:
+            self.expected_units = canonical_unit(self.expected_units)
+        validate_temperature_kind(self.expected_temperature_kind, self.expected_units)
 
 
 @dataclass
@@ -107,6 +111,7 @@ class BarbStyle(Style):
     barb_increments: Optional[Dict] = None
     colorbar_style: Optional[ContourLabelStyle] = None
     expected_units: Optional[str] = None
+    expected_temperature_kind: Optional[str] = None
     accumulation_hours: Optional[float] = None
 
     def __post_init__(self):
@@ -124,8 +129,9 @@ class BarbStyle(Style):
                     f"BarbStyle.barb_increments must contain keys {required_keys}, "
                     f"missing: {missing}"
                 )
-        if self.expected_units is not None and not isinstance(self.expected_units, str):
-            raise TypeError("BarbStyle.expected_units must be a string or None")
+        if self.expected_units is not None:
+            self.expected_units = canonical_unit(self.expected_units)
+        validate_temperature_kind(self.expected_temperature_kind, self.expected_units)
 
 
 from .registry import (  # noqa: E402

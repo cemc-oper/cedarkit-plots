@@ -21,3 +21,4 @@ styles:
       palette: cemc.ws_850.cn
     fill: true
     extend: both
+    expected_units: m/s

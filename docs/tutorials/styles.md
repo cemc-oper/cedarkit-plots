@@ -26,12 +26,16 @@ import numpy as np
 import xarray as xr
 from cedarkit.plots import Panel
 from cedarkit.plots.style import StyleRegistry
+from cedarkit.plots.units import prepare_field
 
 x, y = np.meshgrid(np.linspace(-1, 1, 30), np.linspace(-1, 1, 24))
 def field(values, units):
     return xr.DataArray(values, dims=("y", "x"), attrs={"units": units})
 
-temperature = field(16 + 25 * x + 8 * np.sin(3 * y), "degC")
+temperature = prepare_field(
+    field(16 + 25 * x + 8 * np.sin(3 * y), "degC"),
+    temperature_kind="absolute",
+).field
 height = field(560 + 40 * x + 15 * y, "dagpm")
 u, v = field(8 + 4 * y, "m/s"), field(3 + 4 * x, "m/s")
 registry = StyleRegistry.default()
@@ -70,6 +74,6 @@ with Panel() as panel:
 ```
 
 这里三个内部区间分别为 `[5,25)`、`[25,50)`、`[50,100)`，低值透明。
-完整 CEMC 降水样式可直接用 `registry.get_style("rain:cn")`。
+完整 CEMC 降水样式可直接用 `registry.get_style("rain:cn", metadata={"units": "mm", "accumulation_hours": 24})`。
 风切变 `shr` 的等级由产品计算后通过 `overrides={"levels": levels}` 提供，
-可用同一组等级构建填色和线样式。产品累计时段与单位处理见后续单位边界接口。
+可用同一组等级构建填色和线样式。单位显式准备见 [单位边界](./units.md)；累计时段必须由数据流程提供。

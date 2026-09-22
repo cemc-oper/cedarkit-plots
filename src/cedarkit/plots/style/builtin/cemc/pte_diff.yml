@@ -22,6 +22,8 @@ styles:
       palette: cemc.pte_diff.cn_fill
     fill: true
     extend: both
+    expected_units: K
+    expected_temperature_kind: difference
   cn_line:
     type: contour
     levels:
@@ -43,3 +45,5 @@ styles:
       color: black
       background_color: white
       fontsize: 8
+    expected_units: K
+    expected_temperature_kind: difference

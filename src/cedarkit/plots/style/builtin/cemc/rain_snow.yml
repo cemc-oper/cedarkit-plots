@@ -19,3 +19,5 @@ styles:
     colorbar:
       label: mix
     extend: both
+    expected_units: mm
+    accumulation_hours: 24
