@@ -75,6 +75,7 @@ getting_started/concepts
 :caption: 教程
 
 tutorials/synthetic_data
+tutorials/quickplot
 tutorials/styles
 tutorials/style_library
 tutorials/colormap

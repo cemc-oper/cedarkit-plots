@@ -13,50 +13,29 @@ kernelspec:
 
 # 快速上手
 
-下面这段代码用 `cedarkit-plots` 在东亚地图模板上画一张
-2 米温度填充图。绘图所需的合成数据来自
-{mod}`cedarkit.plots.testing`。
+下面用内置 CEMC 样式绘制合成温度场。示例采用 XY 坐标，不需要下载地图资源。
 
 ```{code-cell} python
-import pandas as pd
+import numpy as np
+import xarray as xr
+from cedarkit.plots import quickplot
 
-from cedarkit.plots.chart import Panel
-from cedarkit.plots.domains import EastAsiaMapTemplate
-from cedarkit.plots.testing import (
-    east_asia_temperature_field,
-    temperature_style,
+x, y = np.meshgrid(np.linspace(-1, 1, 30), np.linspace(-1, 1, 24))
+temperature = xr.DataArray(
+    273.15 + 15 + 20*x + 8*np.sin(3*y), dims=("y", "x"),
+    attrs={"units": "K", "temperature_kind": "absolute",
+           "cemc_name": "t2m", "standard_name": "air_temperature"},
 )
-
-# 1. 准备数据与样式
-field = east_asia_temperature_field()
-style = temperature_style()
-
-# 2. 选择一个地图模板，构造绘图面板
-domain = EastAsiaMapTemplate()
-panel = Panel(domain=domain)
-
-# 3. 把数据画到面板上
-panel.plot(field, style=style)
-
-# 4. 添加标题和色标
-panel.set_title(
-    graph_name="2m Temperature (°C)",
-    system_name="cedarkit-plots demo",
-    start_time=pd.Timestamp("2024-11-09 00:00:00"),
-    forecast_time=pd.Timedelta("24h"),
-)
-panel.add_colorbar(style=style)
-
-# 5. 显示（在脚本里也可以用 panel.save("out.png")）
-panel.show()
+with quickplot.plot(temperature, units="degC", title="2m temperature",
+                    colorbar_label="degC", output="temperature.png") as result:
+    print(result.conversions[0][0])
+    # result.panel / result.chart / result.layer 是可继续配置和更新的句柄。
 ```
 
-整张图由四个对象协作完成：
+显式 units= 先校验并准备数据，再匹配样式。输入字段保持 K，不被修改。
+成功返回的 Panel 保持打开；with 退出时关闭。若不使用 with，请调用 result.close()。
+不传 output 时仍完成渲染，可通过 result.panel.show() 主动显示。
 
-- 数据 `field` 是一个二维 {class}`xarray.DataArray`；
-- 样式 `style` 描述等值线层级、色表、是否填充；
-- 模板 `domain` 决定地图投影、坐标范围、标题与色标位置；
-- 面板 `panel` 把上述对象组合起来，最后产出一张 matplotlib 图。
-
-后续教程会从这四个对象出发，分别介绍如何替换合成数据、
-切换地图模板、定制样式与色表。
+风羽用 `quickplot.barbs(u, v)`，成员图用 `quickplot.facet(data, dim="number")`。
+完整的单位、角色、共享色阶和模板用法见 [快绘教程](../tutorials/quickplot.md)。
+需要叠加多个图层时，继续使用返回的 Chart，或直接创建 Panel/Chart；无需另一套渲染 API。

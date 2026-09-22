@@ -9,6 +9,7 @@ mystnb:
 :maxdepth: 2
 
 chart
+quickplot
 domains
 style
 engine

@@ -1169,6 +1169,13 @@ class _PanelImpl:
                 plt.close(temporary)
             self._force_failed = force
             raise RenderError("rendering failed", stage="draw", cause=exc) from exc
+        except BaseException:
+            # Interruptions must release the in-progress Figure as well; it
+            # is not yet owned by self._fig, so Panel.close cannot see it.
+            if temporary is not None:
+                plt.close(temporary)
+            self._force_failed = force
+            raise
         old_fig = self._fig
         self._fig = temporary
         self._generation = generation
