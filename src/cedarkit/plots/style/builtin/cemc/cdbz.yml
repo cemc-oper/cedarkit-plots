@@ -1,0 +1,19 @@
+# CEMC style migrated from cedar-graph (Apache-2.0).
+# Palette provenance: resources/palettes/NOTICE.txt.
+id: cdbz
+criteria:
+- cemc_name: cdbz
+- wgrib2_name: CR
+optimal: cn
+styles:
+  cn:
+    type: contour
+    levels:
+      range:
+      - 10
+      - 75
+      - 5
+    colormap:
+      palette: cemc.cdbz.cn
+    fill: true
+    extend: both

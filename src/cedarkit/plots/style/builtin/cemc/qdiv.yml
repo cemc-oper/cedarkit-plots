@@ -1,0 +1,30 @@
+# CEMC style migrated from cedar-graph (Apache-2.0).
+# Palette provenance: resources/palettes/NOTICE.txt.
+id: qdiv
+criteria:
+- cemc_name: qdiv
+- wgrib2_name: FRZR
+optimal: cn_fill
+styles:
+  cn_fill:
+    type: contour
+    levels:
+      range:
+      - -50
+      - 0
+      - 5
+    colormap:
+      palette: cemc.qdiv.cn_fill
+    fill: true
+    extend: both
+  cn_line:
+    type: contour
+    levels:
+      range:
+      - -50
+      - 0
+      - 5
+    colormap:
+      palette: cemc.qdiv.cn_line
+    linewidth: 0.2
+    linestyles: '-'

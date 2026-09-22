@@ -1,0 +1,70 @@
+# CEMC style migrated from cedar-graph (Apache-2.0).
+# Palette provenance: resources/palettes/NOTICE.txt.
+id: t_dew_t
+criteria:
+- cemc_name: t_dew_t
+optimal: cn_fill
+styles:
+  cn_fill:
+    type: contour
+    levels:
+    - 1
+    - 3
+    - 5
+    - 7
+    - 9
+    - 11
+    - 15
+    - 17
+    - 21
+    - 25
+    - 29
+    - 33
+    colormap:
+      palette: cemc.t_dew_t.cn_fill
+    fill: true
+    extend: both
+  cn_line:
+    type: contour
+    levels:
+    - 1
+    - 3
+    - 5
+    - 7
+    - 9
+    - 11
+    - 15
+    - 17
+    - 21
+    - 25
+    - 29
+    - 33
+    colormap:
+      palette: cemc.t_dew_t.cn_line
+    linewidth: 0.1
+    highlight:
+    - level: 5
+      linewidth: 2.0
+      color: '#ff00ffff'
+  cn_t:
+    type: contour
+    levels:
+      linspace:
+      - -80
+      - 80
+      - 81
+    colormap:
+      palette: cemc.t_dew_t.cn_t
+    linewidth: 1.0
+    linestyles: solid
+    highlight:
+    - level: 0
+      color:
+      - 0
+      - 0
+      - 0
+      - 0
+      linewidth: 2.0
+    label:
+      background_color: white
+      line_colors: true

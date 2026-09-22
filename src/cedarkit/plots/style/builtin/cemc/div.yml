@@ -1,0 +1,33 @@
+# CEMC style migrated from cedar-graph (Apache-2.0).
+# Palette provenance: resources/palettes/NOTICE.txt.
+id: div
+criteria:
+- cemc_name: div
+- wgrib2_name: RELD
+optimal: cn_fill
+styles:
+  cn_fill:
+    type: contour
+    levels:
+      range:
+      - -50
+      - 0
+      - 5
+    colormap:
+      palette: cemc.div.cn_fill
+    fill: true
+    extend: both
+  cn_line:
+    type: contour
+    levels:
+      range:
+      - -50
+      - 0
+      - 5
+    colormap:
+      palette: cemc.div.cn_line
+    linewidth: 0.5
+    linestyles: solid
+    label:
+      fontsize: 7
+      background_color: white

@@ -1,0 +1,19 @@
+# CEMC style migrated from cedar-graph (Apache-2.0).
+# Palette provenance: resources/palettes/NOTICE.txt.
+id: rh2m
+criteria:
+- cemc_name: rh2m
+- eccodes_name: 2r
+optimal: cn
+styles:
+  cn:
+    type: contour
+    levels:
+      linspace:
+      - 70
+      - 100
+      - 7
+    colormap:
+      palette: cemc.rh2m.cn
+    fill: true
+    extend: both

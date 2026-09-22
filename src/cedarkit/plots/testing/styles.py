@@ -8,43 +8,25 @@
 from __future__ import annotations
 
 import numpy as np
-import matplotlib.colors as mcolors
-
-from cedarkit.plots.colormap import (
-    get_ncl_colormap,
-    generate_colormap_using_ncl_colors,
-)
+from cedarkit.plots.palette import get_palette
 from cedarkit.plots.style import ContourStyle, BarbStyle
 
 
 def temperature_style() -> ContourStyle:
-    """温度填充样式（NCL ``BlAqGrYeOrReVi200`` 色表）。"""
-    color_map = get_ncl_colormap("BlAqGrYeOrReVi200")
-    levels = [-12, -8, -4, 0, 4, 8, 12, 16, 20, 24, 28, 32, 36, 40, 44]
-    color_index = np.array(
-        [2, 18, 34, 50, 66, 82, 110, 120, 130, 140, 150, 160, 170, 180, 190, 200]
-    ) - 2
-    listed = mcolors.ListedColormap(color_map(color_index))
-    return ContourStyle(colors=listed, levels=levels, fill=True)
+    """CEMC summer temperature with native discrete colors (degrees Celsius)."""
+    return ContourStyle(
+        colors=get_palette("cemc.t2m.cn_summer"),
+        levels=[-12, -8, -4, 0, 4, 8, 12, 16, 20, 24, 28, 32, 36, 40, 44],
+        fill=True, extend="both",
+    )
 
 
 def precipitation_style() -> ContourStyle:
-    """24 小时降水填充样式（使用 NCL 命名颜色组合）。"""
-    levels = np.array([0.1, 10, 25, 50, 100, 200])
-    cmap = generate_colormap_using_ncl_colors(
-        [
-            "transparent",
-            "White",
-            "DarkOliveGreen3",
-            "forestgreen",
-            "deepSkyBlue",
-            "Blue",
-            "Magenta",
-            "deeppink4",
-        ],
-        name="rain",
+    """CEMC 24-hour precipitation with a transparent under color."""
+    return ContourStyle(
+        colors=get_palette("cemc.rain.cn"),
+        levels=[0.1, 10, 25, 50, 100, 200], fill=True, extend="both",
     )
-    return ContourStyle(colors=cmap, levels=levels, fill=True)
 
 
 def pressure_contour_style() -> ContourStyle:

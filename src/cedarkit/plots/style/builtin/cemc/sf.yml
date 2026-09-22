@@ -1,0 +1,23 @@
+# CEMC style migrated from cedar-graph (Apache-2.0).
+# Palette provenance: resources/palettes/NOTICE.txt.
+id: sf
+criteria:
+- cemc_name: sf
+- wgrib2_name: ASNOW
+optimal: cn
+styles:
+  cn:
+    type: contour
+    levels:
+    - 0.1
+    - 2.5
+    - 5
+    - 10
+    - 20
+    - 30
+    colormap:
+      palette: cemc.sf.cn
+    fill: true
+    colorbar:
+      label: snow
+    extend: both

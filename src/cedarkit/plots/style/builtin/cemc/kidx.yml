@@ -1,0 +1,38 @@
+# CEMC style migrated from cedar-graph (Apache-2.0).
+# Palette provenance: resources/palettes/NOTICE.txt.
+id: kidx
+criteria:
+- cemc_name: kidx
+- wgrib2_name: KX
+optimal: cn_fill
+styles:
+  cn_fill:
+    type: contour
+    levels:
+    - 20
+    - 25
+    - 30
+    - 35
+    - 40
+    - 45
+    - 50
+    colormap:
+      palette: cemc.kidx.cn_fill
+    fill: true
+    extend: both
+  cn_line:
+    type: contour
+    levels:
+    - 20
+    - 25
+    - 30
+    - 35
+    - 40
+    - 45
+    - 50
+    colormap:
+      palette: cemc.kidx.cn_line
+    linewidth: 0.5
+    label:
+      fontsize: 7
+      background_color: white

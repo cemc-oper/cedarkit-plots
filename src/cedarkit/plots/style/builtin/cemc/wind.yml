@@ -1,0 +1,17 @@
+# CEMC style migrated from cedar-graph (Apache-2.0).
+# Palette provenance: resources/palettes/NOTICE.txt.
+id: wind
+criteria:
+- cemc_name: u
+- cemc_name: v
+- eccodes_name: u
+- eccodes_name: v
+- wgrib2_name: UGRD
+- wgrib2_name: VGRD
+optimal: cn
+styles:
+  cn:
+    type: barb
+    barbcolor: black
+    flagcolor: black
+    linewidth: 0.3

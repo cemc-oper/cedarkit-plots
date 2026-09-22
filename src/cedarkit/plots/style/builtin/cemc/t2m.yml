@@ -1,0 +1,57 @@
+# CEMC style migrated from cedar-graph (Apache-2.0).
+# Palette provenance: resources/palettes/NOTICE.txt.
+id: t2m
+criteria:
+- cemc_name: t2m
+- eccodes_name: 2t
+- eccodes_name: t
+  first_level_type: 103
+  first_level: 2
+optimal: cn_summer
+styles:
+  cn_summer:
+    type: contour
+    colormap:
+      palette: cemc.t2m.cn_summer
+    levels:
+    - -12
+    - -8
+    - -4
+    - 0
+    - 4
+    - 8
+    - 12
+    - 16
+    - 20
+    - 24
+    - 28
+    - 32
+    - 36
+    - 40
+    - 44
+    fill: true
+    expected_units: degC
+    extend: both
+  cn_winter:
+    type: contour
+    colormap:
+      palette: cemc.t2m.cn_winter
+    levels:
+    - -24
+    - -20
+    - -16
+    - -12
+    - -8
+    - -4
+    - 0
+    - 4
+    - 8
+    - 12
+    - 16
+    - 20
+    - 24
+    - 28
+    - 32
+    fill: true
+    expected_units: degC
+    extend: both

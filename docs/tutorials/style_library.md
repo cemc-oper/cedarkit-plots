@@ -11,9 +11,9 @@ cedarkit-plots 的要素样式库把"某个气象要素该怎么画"（色标、
 匹配与构建。本文介绍样式文件的结构与编写方法。
 
 ```{note}
-业务色标（CEMC 各要素）集中在 cedar-graph 的
-`cedar_graph/styles/cn/` 下，经 entry point 注入；cedarkit-plots
-自带 `style/builtin/generic/` 中的通用样式。CEMC 全量资源内置由 D12-04 完成。本文以两者为例。
+业务色标已内置在 `style/builtin/cemc/`：20 个 ID、37 个变体，
+无需安装 cedar-graph。通用样式位于 `style/builtin/generic/`。
+默认 profile 为 cemc，通用样式通过 `generic.t` 显式选择。
 ```
 
 ## 一个完整的例子
@@ -36,12 +36,12 @@ styles:
   cn_dagpm:                 # 500 hPa 高度场（蓝色线 + 588 黑色特征线）
     type: contour
     levels: { linspace: [500, 588, 23] }
-    colormap: { rgb_table: cn_hgt20, index: 14 }
-    label: { inline: true, fontsize: 7, fmt: "{:.0f}", color_index: 15 }
+    colormap: { palette: cemc.h_500.cn_dagpm }
+    label: { inline: true, fontsize: 7, fmt: "{:.0f}", color: "#ff0000" }
     highlight:
       level: 588
       linewidth: 1.4
-      color_index: 1
+      color: "black"
     expected_units: dagpm
 ```
 
@@ -87,24 +87,25 @@ levels: { step: 4, reference: 0 }     # 按数据范围动态生成：以 refere
 `step` 构建为 `LevelStep` 规则，在新 Panel 的 render 阶段根据数据范围计算；
 `get_style(..., data=field)` 只读取元数据，不读取字段值。动态 step 不与固定层次 highlight 混用。
 
-### colormap：原生 palette 与其他来源
+### colormap：原生 palette 与显式颜色
 
 ```yaml
-colormap: { palette: cemc.t2m.cn_summer }      # 原生离散 palette
-colormap: viridis                            # matplotlib 色表名（裸字符串）
-colormap: { ncl: BlAqGrYeOrReVi200, index: [2, 18, 34], index_offset: -2 }
-colormap: { rgb_table: cn_hgt20, index: 14 } # 共享 RGB 表（register_rgb_table 注册）
-colormap: { colors: ["#ff0000", "#00ff00"] } # 颜色列表
-colormap: { ncl_colors: [...] }              # NCL 颜色名列表
+colormap: { palette: cemc.t2m.cn_summer }
+colormap: viridis
+colormap: { colors: ["#ff0000", "#00ff00"] }
 ```
 
-palette/ncl/rgb_table/colors/ncl_colors 必须**恰好设置一个**。
-原生 palette 只接受具名表，不接受 index/count/offset 等二次变换；其 label/highlight
-color_index 只指向实际选中表。迁移旧母表高亮/标签时使用 tools/style_palette_map.json
-中的显式颜色。NCL 来源待 D12-04/D14 调用迁移后删除。`index` / `index_offset` / `count` /
-`spread_start` / `spread_end` 只对 `ncl` / `rgb_table` 有效；
-`count` / `spread_start` / `spread_end` 只对 `ncl` 有效
-（schema 强制校验）。
+三种来源择一。原生 palette 不接受 index/count/offset 等二次变换。
+原生固定填色等级使用 `extend: both` 时，按包含扩展区间的 BoundaryNorm
+从原表选择内部区间颜色，并保留 under/over/bad；默认 `extend: neither`。
+原生线色按层次位置分配，单色重复，额外尾色不参与绘制；高亮覆盖指定层次。
+母表的标签/高亮索引已经迁为显式颜色，不再对派生表误用旧索引。
+
+`shr` 两个变体保留无固定等级的声明。产品计算等级后通过
+`get_style("shr:cn_fill", overrides={"levels": levels})` 构建固定离散样式，
+再使用同一组等级构建 cn_line；不依赖 Style 取字段值。
+月份、降水时段和产品图层组合仍由产品选择，不在样式库自动推断。
+旧 ncl/rgb_table/ncl_colors schema 只供 D14 待迁移调用，内置样式不使用。
 
 ### highlight：特征线
 
@@ -112,7 +113,7 @@ color_index 只指向实际选中表。迁移旧母表高亮/标签时使用 too
 highlight:
   level: 588
   linewidth: 1.4      # 基准线宽默认 0.7
-  color_index: 1      # 或 color: "black"；两者互斥
+  color: "black"      # 显式颜色，不依赖旧母表索引
 ```
 
 构建时展开为逐层次（per-level）的线宽与颜色数组——`h_500` 的

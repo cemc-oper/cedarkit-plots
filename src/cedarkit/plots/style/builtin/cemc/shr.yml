@@ -1,0 +1,20 @@
+# CEMC style migrated from cedar-graph (Apache-2.0).
+# Palette provenance: resources/palettes/NOTICE.txt.
+id: shr
+criteria:
+- cemc_name: shr
+- wgrib2_name: VWSH
+- eccodes_name: vwsh
+optimal: cn_fill
+styles:
+  cn_fill:
+    type: contour
+    colormap:
+      palette: cemc.shr.cn_fill
+    fill: true
+    extend: both
+  cn_line:
+    type: contour
+    colormap:
+      palette: cemc.shr.cn_line
+    linewidth: 0.3

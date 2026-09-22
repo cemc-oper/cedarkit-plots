@@ -1,0 +1,21 @@
+# CEMC style migrated from cedar-graph (Apache-2.0).
+# Palette provenance: resources/palettes/NOTICE.txt.
+id: rain_snow
+criteria:
+- cemc_name: rain_snow
+optimal: cn
+styles:
+  cn:
+    type: contour
+    levels:
+    - 0.1
+    - 10
+    - 25
+    - 50
+    - 100
+    colormap:
+      palette: cemc.rain_snow.cn
+    fill: true
+    colorbar:
+      label: mix
+    extend: both

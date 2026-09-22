@@ -349,6 +349,26 @@ def build_style(
         # scalar color index on a line contour: broadcast to per-level colors
         colors = _expand_per_level_colors(source, levels, [], style_name)
 
+    # Native palette rows describe discrete regions, including extension rows.
+    # Compile them into the core's interval cmap + special-color contract.
+    # Line palettes are positional: the final extra row in legacy tables is
+    # unused by contour(), never interpolated across the level range.
+    native = isinstance(variant.colormap, ColormapSpec) and variant.colormap.palette is not None
+    if native and levels is not None and not isinstance(levels, LevelStep):
+        if variant.fill and variant.extend != "neither":
+            norm = mcolors.BoundaryNorm(levels, colors.N, extend=variant.extend)
+            midpoints = (np.asarray(levels[:-1]) + np.asarray(levels[1:])) / 2
+            compiled = mcolors.ListedColormap(colors(norm(midpoints)), name=style_name)
+            compiled.set_under(colors.get_under())
+            compiled.set_over(colors.get_over())
+            compiled.set_bad(colors.get_bad())
+            colors = compiled
+        elif not variant.fill:
+            colors = [tuple(colors(i % colors.N)) for i in range(len(levels))]
+
+    if native and not variant.fill and levels is None:
+        colors = list(colors.colors)
+
     linewidths = _expand_linewidths(variant, levels, highlights, style_name)
 
     label = variant.label is not None
@@ -372,6 +392,7 @@ def build_style(
         linewidths=linewidths,
         linestyles=variant.linestyles,
         fill=variant.fill,
+        extend=variant.extend,
         label=label,
         label_style=label_style,
         colorbar_style=colorbar_style,

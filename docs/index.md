@@ -8,7 +8,7 @@ mystnb:
 `cedarkit-plots` 是构建在 Matplotlib + Cartopy 之上的低层
 气象绘图库，提供面板（`Panel`）、子图（`Chart`）、地图模板
 （`MapTemplate`）、绘图样式（`ContourStyle`、`BarbStyle` …）以及
-NCL 色表与 shapefile 资源。它是 `cedar-graph` 等高层应用包
+原生离散色表、CEMC 样式与 shapefile 资源。它是 `cedar-graph` 等高层应用包
 背后的"画图引擎"。
 
 ```{admonition} 文档约定

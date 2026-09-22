@@ -1,0 +1,45 @@
+# CEMC style migrated from cedar-graph (Apache-2.0).
+# Palette provenance: resources/palettes/NOTICE.txt.
+id: pte_diff
+criteria:
+- cemc_name: pte_diff
+optimal: cn_fill
+styles:
+  cn_fill:
+    type: contour
+    levels:
+    - -40
+    - -35
+    - -30
+    - -25
+    - -20
+    - -15
+    - -10
+    - -5
+    - 0
+    - 5
+    colormap:
+      palette: cemc.pte_diff.cn_fill
+    fill: true
+    extend: both
+  cn_line:
+    type: contour
+    levels:
+    - -40
+    - -35
+    - -30
+    - -25
+    - -20
+    - -15
+    - -10
+    - -5
+    - 0
+    - 5
+    colormap:
+      palette: cemc.pte_diff.cn_line
+    linewidth: 0.6
+    linestyles: solid
+    label:
+      color: black
+      background_color: white
+      fontsize: 8

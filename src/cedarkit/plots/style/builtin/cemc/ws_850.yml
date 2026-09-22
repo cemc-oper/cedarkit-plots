@@ -1,0 +1,23 @@
+# CEMC style migrated from cedar-graph (Apache-2.0).
+# Palette provenance: resources/palettes/NOTICE.txt.
+id: ws_850
+criteria:
+- cemc_name: ws
+  first_level_type: 100
+  first_level: 850
+optimal: cn
+styles:
+  cn:
+    type: contour
+    levels:
+    - 12
+    - 15
+    - 18
+    - 21
+    - 24
+    - 27
+    - 30
+    colormap:
+      palette: cemc.ws_850.cn
+    fill: true
+    extend: both

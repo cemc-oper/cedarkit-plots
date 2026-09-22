@@ -1,0 +1,29 @@
+# CEMC style migrated from cedar-graph (Apache-2.0).
+# Palette provenance: resources/palettes/NOTICE.txt.
+id: psl
+criteria:
+- cemc_name: psl
+- eccodes_name: prmsl
+- wgrib2_name: PRMSL
+  first_level_type: 101
+optimal: cn
+styles:
+  cn:
+    type: contour
+    levels:
+    - 980
+    - 985
+    - 990
+    - 995
+    - 1000
+    - 1005
+    - 1020
+    - 1025
+    - 1030
+    - 1035
+    - 1040
+    colormap:
+      palette: cemc.psl.cn
+    fill: true
+    expected_units: hPa
+    extend: both

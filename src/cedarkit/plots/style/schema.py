@@ -233,6 +233,7 @@ class StyleVariant(StrictModel):
     linewidth: Optional[float] = None
     linestyles: Optional[str] = None
     fill: bool = False
+    extend: Literal["neither", "min", "max", "both"] = "neither"
     label: Optional[LabelSpec] = None
     highlight: Optional[Union[HighlightEntry, List[HighlightEntry]]] = None
     colorbar: Optional[ColorbarSpec] = None
@@ -267,7 +268,7 @@ class StyleVariant(StrictModel):
         barb_keys = ("length", "pivot", "barbcolor", "flagcolor", "barb_increments")
         if self.type == "barb":
             used = [k for k in contour_keys if getattr(self, k) is not None]
-            if self.fill or used:
+            if self.fill or self.extend != "neither" or used:
                 raise ValueError(f"barb variant cannot set contour keys: {used + (['fill'] if self.fill else [])}")
         else:
             used = [k for k in barb_keys if getattr(self, k) is not None]

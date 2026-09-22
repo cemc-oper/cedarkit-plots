@@ -38,85 +38,35 @@ catalog 包含 51 个表；来源版本、逐文件 SHA256、MeteoSwiss/Gist 原
 在包内 `resources/palettes/`。离线再生成用 `tools/convert_palettes.py --check`，
 可加 `--source-dir src/cedarkit/plots/resources/colormap/ncl` 核验旧输入字节。
 
-## 旧 NCL 入口（待调用迁移后删除）
-
-以下入口仍供尚未迁移的 graph/testing 调用；原生读取器不调用它们。
-旧 transparent 的不透明行为只在新原生表修正，旧函数不是新 palette 的兼容转发层。
-
-## `get_ncl_colormap`
-
-按名称加载一个 NCL 色表，返回 :class:`matplotlib.colors.ListedColormap`：
+## 可执行色表预览
 
 ```{code-cell} python
 import matplotlib.pyplot as plt
 import numpy as np
+from cedarkit.plots.palette import get_palette
 
-from cedarkit.plots.colormap import get_ncl_colormap
-
-cmap = get_ncl_colormap("BlAqGrYeOrReVi200")
-print("color count:", cmap.N)
-
-# 可视化整个色表
-gradient = np.linspace(0, 1, cmap.N).reshape(1, -1)
-plt.figure(figsize=(8, 1))
-plt.imshow(gradient, aspect="auto", cmap=cmap)
-plt.gca().set_axis_off()
+cmap = get_palette("cemc.t2m.cn_summer")
+fig, ax = plt.subplots(figsize=(8, 1))
+ax.imshow(np.arange(cmap.N)[None, :], cmap=cmap, aspect="auto", interpolation="nearest")
+ax.set_axis_off()
 plt.show()
 ```
 
-### 索引子集
-
-通过 `index` 参数从色表中抽出一个子集，
-对应 NCL 中"`stride`"或"`spread`"的常见用法：
+## 自定义颜色
 
 ```{code-cell} python
-import matplotlib.colors as mcolors
+from cedarkit.plots.palette import get_named_color
+from cedarkit.plots.style import ContourStyle
 
-color_index = np.array([2, 18, 34, 50, 66, 82, 110, 130, 150, 170, 190]) - 2
-sub = mcolors.ListedColormap(cmap(color_index))
-
-gradient = np.linspace(0, 1, sub.N).reshape(1, -1)
-plt.figure(figsize=(8, 1))
-plt.imshow(gradient, aspect="auto", cmap=sub)
-plt.gca().set_axis_off()
-plt.show()
-```
-
-`get_ncl_colormap` 也支持直接传 `count`、`spread_start`、`spread_end`
-让函数代你做线性等距抽样：
-
-```python
-get_ncl_colormap("WhBlGrYeRe", count=10, spread_start=98, spread_end=0)
-```
-
-## `generate_colormap_using_ncl_colors`
-
-如果想按 NCL 命名颜色（"PaleGreen2"、"DeepSkyBlue" …）自由组合，
-用 {func}`~cedarkit.plots.colormap.generate_colormap_using_ncl_colors`：
-
-```{code-cell} python
-from cedarkit.plots.colormap import generate_colormap_using_ncl_colors
-
-rain_cmap = generate_colormap_using_ncl_colors(
-    [
-        "transparent",
-        "White",
-        "DarkOliveGreen3",
-        "forestgreen",
-        "deepSkyBlue",
-        "Blue",
-        "Magenta",
-        "deeppink4",
-    ],
-    name="rain",
+rain_style = ContourStyle(
+    levels=[5, 25, 50, 100], fill=True, extend="both",
+    colors=[get_named_color(name) for name in
+            ["transparent", "PaleGreen2", "ForestGreen", "Blue", "Magenta"]],
 )
-
-gradient = np.linspace(0, 1, rain_cmap.N).reshape(1, -1)
-plt.figure(figsize=(8, 1))
-plt.imshow(gradient, aspect="auto", cmap=rain_cmap)
-plt.gca().set_axis_off()
-plt.show()
 ```
 
-字符串 `"transparent"` 会被识别成完全透明的白，便于做"低于阈值不上色"
-的填色图（典型用法是降水图的 `0.1` mm 以下不显示）。
+显式颜色列表依次对应 under、三个内部区间、over；透明色 alpha 为 0。
+使用完整业务等级时优先 `StyleRegistry.default().get_style("cemc.rain:cn")`。
+原生 palette YAML 的固定填色等级结合 `extend` 编译为内部区间颜色与特殊颜色；
+`get_palette` 本身返回原表，不隐式改变等级或保留扩展位置。
+旧解析器和原始 NCL 文件仅供尚未迁移的下游调用，计划在 D14/D15 删除。

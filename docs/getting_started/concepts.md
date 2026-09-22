@@ -60,10 +60,7 @@ mystnb:
 
 ## Colormap / Resources
 
-- {func}`~cedarkit.plots.colormap.get_ncl_colormap` 从内置的 NCL `.rgb`
-  色表文件中获取 `ListedColormap`，支持索引、抽样、附加颜色等参数。
-- {func}`~cedarkit.plots.colormap.generate_colormap_using_ncl_colors`
-  按 NCL 命名颜色拼一个新色表。
-- 中国 shapefile、NCL 色表等资源都打包在
-  `cedarkit/plots/resources/` 内，通过 `importlib.resources` 加载，
-  无需手动指定路径。
+- `cedarkit.plots.palette.get_palette` 读取内置原生 JSON 离散色表。
+- `get_named_color` 返回经核实的 RGBA 命名色；transparent 的 alpha 为 0。
+- `StyleRegistry.default()` 加载完整 CEMC 样式，无需 cedar-graph。
+- 中国 shapefile 与原生色表打包在 `cedarkit/plots/resources/`，通过包资源读取。

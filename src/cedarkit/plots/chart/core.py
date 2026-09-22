@@ -51,7 +51,7 @@ from cedarkit.plots.config import (
 )
 from cedarkit.plots.errors import ClosedError, ContentError, Issue, RenderError, RenderRequiredError
 from cedarkit.plots.painter.component_bindutils import add_map_info_text
-from cedarkit.plots.style import BarbStyle, ContourStyle, LevelStep, Style
+from cedarkit.plots.style import BarbStyle, ContourLabelStyle, ContourStyle, LevelStep, Style
 
 
 def _content_error(message: str, *, code: str = "invalid_content", path: tuple[str, ...] = ()) -> None:
@@ -1916,6 +1916,17 @@ def _draw_layer(
             result = ax.contourf(x, y, values, **kwargs)
             return result, result
         result = ax.contour(x, y, values, **kwargs)
+        if style.label:
+            label = style.label_style or ContourLabelStyle()
+            label_kwargs = {
+                key: getattr(label, key)
+                for key in ("fontsize", "inline", "inline_spacing", "fmt", "colors", "manual", "zorder")
+                if getattr(label, key) is not None
+            }
+            labels = ax.clabel(result, levels=label.levels, **label_kwargs)
+            if label.background_color is not None:
+                for text in labels:
+                    text.set_bbox(dict(facecolor=label.background_color, edgecolor="none", pad=.5))
         return result, result
     x, y, u_values, v_values = prepared
     xx, yy = np.meshgrid(x, y)

@@ -1,0 +1,42 @@
+# CEMC style migrated from cedar-graph (Apache-2.0).
+# Palette provenance: resources/palettes/NOTICE.txt.
+id: bli
+criteria:
+- cemc_name: bli
+- wgrib2_name: BLI
+optimal: cn_fill
+styles:
+  cn_fill:
+    type: contour
+    levels:
+    - -48
+    - -42
+    - -36
+    - -30
+    - -24
+    - -18
+    - -12
+    - -6
+    - 0
+    colormap:
+      palette: cemc.bli.cn_fill
+    fill: true
+    extend: both
+  cn_line:
+    type: contour
+    levels:
+    - -48
+    - -42
+    - -36
+    - -30
+    - -24
+    - -18
+    - -12
+    - -6
+    - 0
+    colormap:
+      palette: cemc.bli.cn_line
+    linewidth: 0.5
+    label:
+      fontsize: 7
+      background_color: white

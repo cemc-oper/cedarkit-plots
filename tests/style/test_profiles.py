@@ -237,13 +237,13 @@ def test_known_level_mismatch_can_use_declared_generic(tmp_path):
 def test_default_plugins_remain_cemc_when_generic_selected(tmp_path, monkeypatch):
     from types import SimpleNamespace
     from cedarkit.plots.style import registry as module
-    source = write(tmp_path, name="wind", variants={"default": {"type": "barb"}})
+    source = write(tmp_path, name="plugin_wind", variants={"default": {"type": "barb"}})
     ep = SimpleNamespace(name="cn", value="test.styles", load=lambda: SimpleNamespace(STYLE_PATHS=[source.parent]))
     monkeypatch.setattr(module.importlib.metadata, "entry_points", lambda **kwargs: [ep])
     monkeypatch.delenv("CEDARKIT_STYLE_PATH", raising=False)
     reg = StyleRegistry.default(profile="generic")
     assert reg.style_ids == ["t"]
-    assert isinstance(reg.get_style("cemc.wind"), BarbStyle)
+    assert isinstance(reg.get_style("cemc.plugin_wind"), BarbStyle)
 
 
 @pytest.mark.parametrize("duration", [0, -1, float("inf"), float("nan")])
