@@ -115,6 +115,8 @@ class Plot(StrictModel):
     vector: Vector | None = None
     style: str
     targets: str | tuple[str, ...] = "main"
+    data_crs: Literal["plate_carree", "geodetic"] | None = None
+    vector_basis: Literal["grid", "earth"] | None = None
     zorder: float | None = None
 
     _id = field_validator("id")(_identifier)
@@ -138,6 +140,8 @@ class Plot(StrictModel):
             raise ValueError(f"{self.method} requires field and forbids vector")
         if self.field is not None:
             _identifier(self.field)
+        if self.method != "barbs" and self.vector_basis is not None:
+            raise ValueError("vector_basis is only valid for barbs")
         return self
 
 
