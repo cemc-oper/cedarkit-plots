@@ -130,6 +130,9 @@ class _Compiler:
             return tuple(bar.model_copy(update={"label": str(self.expand(bar.label, f"{path}.{bar.id}.label"))})
                          if bar.label is not None else bar for bar in items)
         charts = tuple(chart.model_copy(update={
+            "plots": tuple(plot.model_copy(update={"style": str(self.expand(
+                plot.style, f"spec.content.charts.{chart.id}.plots.{plot.id}.style"))})
+                           for plot in chart.plots),
             "titles": titles(chart.titles, f"spec.content.charts.{chart.id}.titles"),
             "colorbars": colorbars(chart.colorbars, f"spec.content.charts.{chart.id}.colorbars")})
                        for chart in content.charts)

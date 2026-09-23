@@ -85,16 +85,19 @@ def test_provider_failure_retains_source_and_strict_mode():
 
 def test_metadata_placeholders_use_one_formatter_for_args_and_titles():
     raw = {"api_version": "cedarkit.plots/v3", "kind": "PlotRecipe", "metadata": {"name": "example"},
-           "spec": {"params": {"level": {"type": "int", "default": 2}},
+           "spec": {"params": {"level": {"type": "int", "default": 2},
+                              "style_variant": {"type": "enum", "default": "cn_summer",
+                                                "values": ["cn_summer", "cn_winter"]}},
                     "data": {"result": {"field": {"parameter": "cedarkit.t2m",
                                                    "level": {"level": "{params.level}"}}}},
                     "content": {"charts": [{"id": "main", "plots": [{"id": "plot", "method": "contourf",
-                               "field": "result", "style": "cemc.t2m:cn_summer"}],
+                               "field": "result", "style": "cemc.t2m:{params.style_variant}"}],
                                "titles": [{"id": "title", "text": "{metadata.name} {context.forecast_time}"}]}],
                                "titles": [{"id": "heading", "text": "Level {params.level}"}]}}}
     plan = compile_recipe(load_recipe(raw), CompileContext(forecast_time="2026-01-01T00:00Z"))
     assert plan.content.charts[0].titles[0].text == "example 2026-01-01T00:00:00Z"
     assert plan.content.titles[0].text == "Level 2"
+    assert plan.content.charts[0].plots[0].style == "cemc.t2m:cn_summer"
     assert next(node.request for node in plan.nodes if node.request).query.level == 2
 
     broken = deepcopy(raw)
