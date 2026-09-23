@@ -89,6 +89,8 @@ class Data(StrictModel):
     field: Field | None = None
     compute: Operation | None = None
     units: str | None = None
+    source_units: str | None = None
+    temperature_kind: Literal["absolute", "difference"] | None = None
     transforms: tuple[Transform, ...] = ()
 
     @model_validator(mode="after")

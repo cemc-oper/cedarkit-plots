@@ -54,7 +54,8 @@ def test_compile_and_preflight_use_metadata_only_and_never_construct_figure(monk
             self.requests = requests
             return ["missing"] * len(requests)
 
-    plan = compile_recipe(recipe({"result": {"field": {"parameter": "cedarkit.t2m"}, "units": "degC"}}))
+    plan = compile_recipe(recipe({"result": {"field": {"parameter": "cedarkit.t2m"},
+                                             "units": "degC", "temperature_kind": "absolute"}}))
     provider = MetadataOnlyProvider()
     report = plan.check_available(provider)
     assert len(provider.requests) == 1

@@ -53,6 +53,7 @@ class PlanNode:
     dependencies: tuple[str, ...]
     origin: str
     bindings: tuple[str, ...]
+    input_slots: tuple[int, ...] = ()
     descriptor: str | None = None
     args: tuple[Any, ...] = ()
     kwargs: tuple[tuple[str, Any], ...] = ()
@@ -143,3 +144,7 @@ class WorkflowPlan:
             result.append(RequestAvailability(node.id, value, self.consumers(node.id), node.origin, detail,
                                               self.recipe_identity))
         return AvailabilityReport(tuple(result))
+
+    def execute(self, provider: Any, *, registry: Any = None) -> Any:
+        from ..runtime import execute_plan
+        return execute_plan(self, provider, registry=registry)

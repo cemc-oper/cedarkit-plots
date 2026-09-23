@@ -12,7 +12,7 @@ import pandas as pd
 from reki import resolve_parameter
 
 from ...ops import OpRegistry
-from ...units import canonical_unit
+from ...units import canonical_unit, conversion_rule
 from ..recipe import LoadedRecipe, Recipe
 from .model import FieldRequest, PlanIssue, PlanNode, RecipeCompileError, WorkflowPlan
 
@@ -210,6 +210,7 @@ class _Compiler:
             kwargs = self.expand(op.kwargs, origin + ".compute.kwargs")
             current = self.add("compute", (name, op.op, dependencies, args, kwargs), dependencies,
                                origin + ".compute", tuple(sorted(set((name, *aliases)))),
+                               input_slots=tuple(self.slots[source] for source in op.inputs),
                                descriptor=op.op, args=args, kwargs=tuple(sorted(kwargs.items())),
                                output_count=descriptor.output_count, pure=descriptor.pure, reusable=descriptor.reusable)
             for index, alias in enumerate(aliases):
@@ -254,16 +255,28 @@ class _Compiler:
                     dependencies = (current,)
                 current = self.add("transform", (name, index, repeat, transform.op, dependencies, args, kwargs),
                                    dependencies, origin + f".transforms.{index}", (name,), descriptor=transform.op,
-                                   args=args, kwargs=tuple(sorted(kwargs.items())), pure=descriptor.pure,
+                                   args=() if transform.op == "time_diff" else args,
+                                   kwargs=tuple(sorted(kwargs.items())), pure=descriptor.pure,
                                    reusable=descriptor.reusable)
             self.bindings[name] = current
-        if item.units is not None:
+        if item.units is not None or item.source_units is not None or item.temperature_kind is not None:
             try:
-                target = canonical_unit(item.units)
+                target = canonical_unit(item.units) if item.units is not None else None
+                declared_source = item.source_units
+                catalog_source = resolve_parameter(item.field.parameter).record.unit if item.field and not item.transforms else None
+                if declared_source is not None and catalog_source is not None and canonical_unit(declared_source) != canonical_unit(catalog_source):
+                    raise ValueError(f"source_units {declared_source!r} contradict catalog units {catalog_source!r}")
+                if declared_source is None and item.field and not item.transforms:
+                    declared_source = catalog_source
+                source = canonical_unit(declared_source) if declared_source is not None else None
+                if source is not None:
+                    conversion_rule(source, target or source, temperature_kind=item.temperature_kind,
+                                    source_from="explicit" if item.source_units is not None else "metadata")
             except ValueError as exc:
-                raise self.error(f"invalid target units: {exc}", "units", binding=name) from exc
+                raise self.error(f"invalid unit declaration: {exc}", "units", binding=name) from exc
             current = self.add("convert_units", (name, target, current), (current,), origin + ".units", (name,),
-                               kwargs=(("units", target),))
+                               kwargs=(("source_units", source), ("temperature_kind", item.temperature_kind),
+                                       ("units", target)))
             self.bindings[name] = current
         if item.compute and len(item.compute.outputs) == 1:
             self.bindings[item.compute.outputs[0]] = current
