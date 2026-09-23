@@ -13,10 +13,10 @@ from reki import resolve_parameter
 
 from ...ops import OpRegistry
 from ...units import canonical_unit, conversion_rule
+from ..metadata import format_value
 from ..recipe import LoadedRecipe, Recipe
 from .model import FieldRequest, PlanIssue, PlanNode, RecipeCompileError, WorkflowPlan
 
-_VARIABLE = re.compile(r"\{(params|metadata)\.([A-Za-z][A-Za-z0-9_-]*)\}")
 _QUERY_FIELDS = {"level_type", "level", "step_type", "time_range", "member"}
 
 
@@ -111,29 +111,30 @@ class _Compiler:
         return values
 
     def expand(self, value: Any, path: str) -> Any:
-        if isinstance(value, Mapping):
-            return {key: self.expand(item, path) for key, item in value.items()}
-        if isinstance(value, (list, tuple)):
-            return tuple(self.expand(item, path) for item in value)
-        if not isinstance(value, str):
-            return value
-        matches = list(_VARIABLE.finditer(value))
-        if not matches:
-            if "{" in value or "}" in value:
-                raise self.error(f"invalid placeholder at {path}: {value!r}", "template")
-            return value
-        variables = {"params": self.params, "metadata": self.recipe.metadata.model_dump()}
-        def lookup(match: re.Match[str]) -> Any:
-            namespace, key = match.groups()
-            if key not in variables[namespace]:
-                raise self.error(f"unknown placeholder {namespace}.{key} at {path}", "template")
-            return variables[namespace][key]
-        if len(matches) == 1 and matches[0].span() == (0, len(value)):
-            return lookup(matches[0])
-        result = _VARIABLE.sub(lambda match: str(lookup(match)), value)
-        if "{" in result or "}" in result:
-            raise self.error(f"invalid placeholder at {path}: {value!r}", "template")
-        return result
+        try:
+            return format_value(value, params=self.params, metadata=self.recipe.metadata.model_dump(),
+                                context=self._context_values(), path=path)
+        except ValueError as exc:
+            raise self.error(str(exc), "template") from exc
+
+    def _context_values(self) -> dict[str, Any]:
+        return {"start_time": _time(self.context.start_time), "forecast_time": _time(self.context.forecast_time),
+                "provider_slot": self.context.provider_slot, "cardinality": self.context.cardinality}
+
+    def _content(self):
+        content = self.recipe.spec.content
+        def titles(items, path):
+            return tuple(title.model_copy(update={"text": str(self.expand(title.text, f"{path}.{title.id}.text"))})
+                         for title in items)
+        def colorbars(items, path):
+            return tuple(bar.model_copy(update={"label": str(self.expand(bar.label, f"{path}.{bar.id}.label"))})
+                         if bar.label is not None else bar for bar in items)
+        charts = tuple(chart.model_copy(update={
+            "titles": titles(chart.titles, f"spec.content.charts.{chart.id}.titles"),
+            "colorbars": colorbars(chart.colorbars, f"spec.content.charts.{chart.id}.colorbars")})
+                       for chart in content.charts)
+        return content.model_copy(update={"charts": charts, "titles": titles(content.titles, "spec.content.titles"),
+                                  "colorbars": colorbars(content.colorbars, "spec.content.colorbars")})
 
     def add(self, kind: str, payload: Any, dependencies: tuple[str, ...], origin: str,
             bindings: tuple[str, ...], **kwargs: Any) -> str:
@@ -329,14 +330,12 @@ class _Compiler:
             if node.request:
                 key = node.request
                 batches.setdefault((key.provider_slot, key.start_time, key.forecast_time, key.cardinality), []).append(node.id)
-        context = {"start_time": _time(self.context.start_time), "forecast_time": _time(self.context.forecast_time),
-                   "params": self.params, "provider_slot": self.context.provider_slot,
-                   "cardinality": self.context.cardinality}
+        context = {**self._context_values(), "params": self.params}
         return WorkflowPlan.create(recipe_identity=self.recipe.metadata.name,
             descriptor_identity=self.registry.manifest()["identity"], context=context,
             nodes=tuple(ordered), outputs={name: node_id for name, node_id in self.bindings.items() if node_id in live},
             output_slots={name: self.slots[name] for name, node_id in self.bindings.items() if node_id in live},
-            content=self.recipe.spec.content.model_copy(deep=True), display=self.recipe.spec.display.model_copy(deep=True),
+            content=self._content(), display=self.recipe.spec.display.model_copy(deep=True),
             issues=dead, read_batches=tuple(tuple(batches[key]) for key in sorted(batches, key=str)))
 
 

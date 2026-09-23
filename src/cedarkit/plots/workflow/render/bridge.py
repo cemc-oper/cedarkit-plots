@@ -15,6 +15,7 @@ from ...config import (
     TextPosition, Theme, TitleSpec,
 )
 from ...domains import Domain
+from ...domains.registry import DomainRegistry
 from ...map import MapType
 from ...painter.map_painter import MapInfo
 from ...style.registry import StyleRegistry, get_default_registry
@@ -139,26 +140,14 @@ def _layout(value: Mapping[str, Any]) -> LayoutSpec:
     return LayoutSpec(**fields)
 
 
-def _template(name: str | None, templates: Mapping[str, Any] | None) -> PanelTemplate | None:
+def _template(name: str | None, templates: Mapping[str, Any] | None,
+              domains: DomainRegistry | None) -> PanelTemplate | None:
     if name is None:
         return None
     if templates is not None and name in templates:
         candidate = templates[name]
     else:
-        from ... import templates as builtins
-
-        factories = {
-            "xy": builtins.xy,
-            "east_asia": builtins.east_asia,
-            "cn_area": builtins.cn_area,
-            "europe_asia": builtins.europe_asia,
-            "global_area": builtins.global_area,
-            "global_map": builtins.global_map,
-            "north_polar": builtins.north_polar,
-        }
-        if name not in factories:
-            raise ValueError(f"unknown template {name!r}")
-        candidate = factories[name]
+        return (domains or DomainRegistry.builtins()).create(name)
     value = candidate() if callable(candidate) else candidate
     if not isinstance(value, PanelTemplate):
         raise TypeError(f"template {name!r} must resolve to PanelTemplate")
@@ -172,6 +161,7 @@ def _display(value: Display | Mapping[str, Any]) -> Display:
 def render_result(
     result: WorkflowResult, *, display: Display | Mapping[str, Any] | None = None,
     style_registry: StyleRegistry | None = None, templates: Mapping[str, Any] | None = None,
+    domains: DomainRegistry | None = None,
     render: bool = True,
 ) -> Panel:
     """Create stable content from prepared values, optionally render once.
@@ -183,7 +173,7 @@ def render_result(
     panel: Panel | None = None
     path = "spec.display"
     try:
-        template = _template(presentation.template, templates)
+        template = _template(presentation.template, templates, domains)
         options: dict[str, Any] = {}
         if presentation.layout:
             options["layout"] = _layout(presentation.layout)

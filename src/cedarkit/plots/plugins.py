@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from importlib import metadata
 from typing import Any, Iterable
 
-from .ops.registry import RegistryProvenance
+from .registry import RegistryProvenance
 
 PLUGIN_GROUPS = ("cedarkit.plots.recipes", "cedarkit.plots.ops", "cedarkit.plots.domains")
 
@@ -41,9 +41,9 @@ def discover(group: str, *, entry_points: Iterable[Any] | None = None, strict: b
     if group not in PLUGIN_GROUPS:
         raise ValueError(f"unsupported plugin group {group!r}")
     candidates = list(entry_points) if entry_points is not None else list(metadata.entry_points(group=group))
-    def ordering(item: Any) -> tuple[str, str]:
+    def ordering(item: Any) -> tuple[str, str, str]:
         distribution, _ = _distribution(item)
-        return ((distribution or "").lower(), item.name)
+        return ((distribution or "").lower(), item.name, getattr(item, "value", ""))
     providers, failures = [], []
     for entry_point in sorted(candidates, key=ordering):
         distribution, version = _distribution(entry_point)
