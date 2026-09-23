@@ -1,0 +1,337 @@
+"""Compile v3 recipes from declarations and catalog metadata only."""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import re
+from dataclasses import dataclass, replace
+from typing import Any, Mapping
+
+import pandas as pd
+from reki import resolve_parameter
+
+from ...ops import OpRegistry
+from ...units import canonical_unit
+from ..recipe import LoadedRecipe, Recipe
+from .model import FieldRequest, PlanIssue, PlanNode, RecipeCompileError, WorkflowPlan
+
+_VARIABLE = re.compile(r"\{(params|metadata)\.([A-Za-z][A-Za-z0-9_-]*)\}")
+_QUERY_FIELDS = {"level_type", "level", "step_type", "time_range", "member"}
+
+
+def _jsonable(value: Any) -> Any:
+    if isinstance(value, Mapping):
+        return {str(key): _jsonable(item) for key, item in sorted(value.items(), key=lambda pair: str(pair[0]))}
+    if isinstance(value, (tuple, list)):
+        return [_jsonable(item) for item in value]
+    if hasattr(value, "isoformat"):
+        return value.isoformat()
+    if isinstance(value, (str, int, float, bool)) or value is None:
+        return value
+    raise TypeError(f"non-serializable plan value {type(value).__name__}")
+
+
+def _stable_id(kind: str, payload: Any) -> str:
+    encoded = json.dumps(_jsonable(payload), sort_keys=True, separators=(",", ":"), allow_nan=False).encode()
+    return f"{kind}:{hashlib.sha256(encoded).hexdigest()[:16]}"
+
+
+def _time(value: Any) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, pd.Timedelta) or (isinstance(value, str) and re.fullmatch(r"[+-]?\d+(?:\.\d+)?[A-Za-z]+", value)):
+        return pd.Timedelta(value).isoformat()
+    stamp = pd.Timestamp(value)
+    stamp = stamp.tz_localize("UTC") if stamp.tzinfo is None else stamp.tz_convert("UTC")
+    return stamp.isoformat().replace("+00:00", "Z")
+
+
+@dataclass(frozen=True)
+class CompileContext:
+    start_time: Any = None
+    forecast_time: Any = None
+    params: Mapping[str, Any] | None = None
+    provider_slot: str = "default"
+    cardinality: str = "one"
+    strict: bool = False
+
+    def __post_init__(self) -> None:
+        if not self.provider_slot or self.cardinality not in {"one", "first", "all"}:
+            raise ValueError("invalid provider_slot or cardinality")
+        object.__setattr__(self, "params", dict(self.params or {}))
+
+
+class _Compiler:
+    def __init__(self, recipe: Recipe, context: CompileContext, registry: OpRegistry, origin: str):
+        self.recipe, self.context, self.registry, self.origin = recipe, context, registry, origin
+        self.params = self._params()
+        self.nodes: dict[str, PlanNode] = {}
+        self.bindings: dict[str, str] = {}
+        self.slots: dict[str, int] = {}
+        self.building: list[str] = []
+        self.done: set[str] = set()
+        self.owners = {name: name for name in recipe.spec.data}
+        for name, item in recipe.spec.data.items():
+            if item.compute:
+                for alias in item.compute.outputs:
+                    self.owners[alias] = name
+
+    def error(self, message: str, code: str, *, binding: str | None = None,
+              node_id: str | None = None) -> RecipeCompileError:
+        return RecipeCompileError(f"product={self.recipe.metadata.name}: {message}", origin=self.origin,
+                                  code=code, binding=binding, node_id=node_id)
+
+    def _params(self) -> dict[str, Any]:
+        supplied = self.context.params or {}
+        unknown = set(supplied) - set(self.recipe.spec.params)
+        if unknown:
+            raise self.error(f"unknown params {sorted(unknown)}", "unknown_param")
+        values = {}
+        for name, spec in self.recipe.spec.params.items():
+            if name not in supplied and spec.required:
+                raise self.error(f"missing required param {name!r}", "missing_param")
+            value = supplied.get(name, spec.default)
+            if value is not None:
+                try:
+                    if spec.type == "timedelta":
+                        value = pd.Timedelta(value)
+                    elif spec.type == "bool":
+                        if isinstance(value, str) and value.lower() in {"true", "false"}:
+                            value = value.lower() == "true"
+                        elif not isinstance(value, bool):
+                            raise ValueError("bool must be true or false")
+                    elif spec.type in {"str", "int", "float", "bool"}:
+                        value = {"str": str, "int": int, "float": float}[spec.type](value)
+                except (TypeError, ValueError) as exc:
+                    raise self.error(f"invalid param {name!r}: {exc}", "invalid_param") from exc
+            if spec.type == "enum" and value not in (spec.values or ()):
+                raise self.error(f"invalid enum param {name!r}", "invalid_param")
+            values[name] = value
+        return values
+
+    def expand(self, value: Any, path: str) -> Any:
+        if isinstance(value, Mapping):
+            return {key: self.expand(item, path) for key, item in value.items()}
+        if isinstance(value, (list, tuple)):
+            return tuple(self.expand(item, path) for item in value)
+        if not isinstance(value, str):
+            return value
+        matches = list(_VARIABLE.finditer(value))
+        if not matches:
+            if "{" in value or "}" in value:
+                raise self.error(f"invalid placeholder at {path}: {value!r}", "template")
+            return value
+        variables = {"params": self.params, "metadata": self.recipe.metadata.model_dump()}
+        def lookup(match: re.Match[str]) -> Any:
+            namespace, key = match.groups()
+            if key not in variables[namespace]:
+                raise self.error(f"unknown placeholder {namespace}.{key} at {path}", "template")
+            return variables[namespace][key]
+        if len(matches) == 1 and matches[0].span() == (0, len(value)):
+            return lookup(matches[0])
+        result = _VARIABLE.sub(lambda match: str(lookup(match)), value)
+        if "{" in result or "}" in result:
+            raise self.error(f"invalid placeholder at {path}: {value!r}", "template")
+        return result
+
+    def add(self, kind: str, payload: Any, dependencies: tuple[str, ...], origin: str,
+            bindings: tuple[str, ...], **kwargs: Any) -> str:
+        node_id = _stable_id(kind, payload)
+        if node_id in self.nodes:
+            raise self.error(f"node ID collision at {origin}", "node_collision", node_id=node_id)
+        self.nodes[node_id] = PlanNode(node_id, kind, dependencies, origin, bindings, **kwargs)
+        return node_id
+
+    def read(self, parameter: str, level: Mapping[str, Any], binding: str, origin: str,
+             *, forecast_time: str | None = None) -> str:
+        expanded = self.expand(level, origin)
+        extra = {key: value for key, value in expanded.items() if key not in _QUERY_FIELDS}
+        standard = {key: value for key, value in expanded.items() if key in _QUERY_FIELDS}
+        try:
+            resolved = resolve_parameter(parameter, extra=extra or None, **standard)
+        except Exception as exc:
+            raise self.error(f"cannot resolve field {parameter!r} at {origin}: {exc}", "field_query", binding=binding) from exc
+        parameter_id = resolved.record.parameter_id
+        if not parameter_id:
+            raise self.error(f"field {parameter!r} has no stable parameter ID", "parameter_id", binding=binding)
+        key = FieldRequest(self.context.provider_slot, parameter_id, resolved.query,
+                           _time(self.context.start_time), forecast_time if forecast_time is not None else _time(self.context.forecast_time),
+                           self.context.cardinality)
+        query = resolved.query
+        payload = {"slot": key.provider_slot, "parameter": key.parameter_id,
+                   "query": {field: getattr(query, field) for field in ("parameter", "level_type", "level", "step_type", "time_range", "member", "extra")},
+                   "start": key.start_time, "forecast": key.forecast_time, "cardinality": key.cardinality}
+        node_id = _stable_id("read", payload)
+        if node_id in self.nodes:
+            node = self.nodes[node_id]
+            self.nodes[node_id] = replace(node, bindings=tuple(sorted(set(node.bindings) | {binding})),
+                                          origin=min(node.origin, origin))
+        else:
+            self.nodes[node_id] = PlanNode(node_id, "read", (), origin, (binding,), request=key)
+        return node_id
+
+    def descriptor(self, name: str, kind: str, inputs: int, outputs: int, binding: str):
+        try:
+            descriptor = self.registry.get(name)
+        except KeyError as exc:
+            raise self.error(str(exc), "unknown_op", binding=binding) from exc
+        if descriptor.kind != kind or descriptor.input_count != inputs or descriptor.output_count != outputs:
+            raise self.error(f"op {name!r} requires {descriptor.kind} {descriptor.input_count} input(s) / {descriptor.output_count} output(s); got {kind} {inputs} / {outputs}",
+                             "op_signature", binding=binding)
+        return descriptor
+
+    def reference(self, name: str, owner: str) -> str:
+        target = self.owners.get(name)
+        if target is None:
+            raise self.error(f"unknown data reference {name!r}", "unknown_reference", binding=owner)
+        self.build(target)
+        return self.bindings[name]
+
+    def build(self, name: str) -> None:
+        if name in self.done:
+            return
+        if name in self.building:
+            cycle = self.building[self.building.index(name):] + [name]
+            raise self.error("dependency cycle: " + " -> ".join(cycle), "cycle", binding=name)
+        self.building.append(name)
+        item = self.recipe.spec.data[name]
+        origin = f"spec.data.{name}"
+        if item.field:
+            current = self.read(item.field.parameter, item.field.level, name, origin + ".field")
+            self.bindings[name], self.slots[name] = current, 0
+        else:
+            op = item.compute
+            assert op is not None
+            aliases = op.outputs or (name,)
+            descriptor = self.descriptor(op.op, "compute", len(op.inputs), len(aliases), name)
+            dependencies = tuple(self.reference(source, name) for source in op.inputs)
+            args = self.expand(op.args, origin + ".compute.args")
+            kwargs = self.expand(op.kwargs, origin + ".compute.kwargs")
+            current = self.add("compute", (name, op.op, dependencies, args, kwargs), dependencies,
+                               origin + ".compute", tuple(sorted(set((name, *aliases)))),
+                               descriptor=op.op, args=args, kwargs=tuple(sorted(kwargs.items())),
+                               output_count=descriptor.output_count, pure=descriptor.pure, reusable=descriptor.reusable)
+            for index, alias in enumerate(aliases):
+                self.bindings[alias], self.slots[alias] = current, index
+            self.bindings[name], self.slots[name] = current, 0
+            if len(aliases) > 1 and (item.transforms or item.units):
+                raise self.error("multi-output data cannot apply one transform/units to all outputs", "multi_output_transform", binding=name)
+        for index, transform in enumerate(item.transforms):
+            descriptor = self.descriptor(transform.op, "transform", 1, 1, name)
+            args = self.expand(transform.args, origin + f".transforms.{index}.args")
+            kwargs = self.expand(transform.kwargs, origin + f".transforms.{index}.kwargs")
+            for repeat in range(transform.repeat):
+                if transform.op == "time_diff":
+                    if len(args) != 1 or kwargs:
+                        raise self.error("time_diff needs one interval argument", "planner", binding=name)
+                    try:
+                        interval = pd.Timedelta(args[0])
+                        raw_forecast = self.context.forecast_time
+                        duration = isinstance(raw_forecast, pd.Timedelta) or (
+                            isinstance(raw_forecast, str) and re.fullmatch(r"[+-]?\d+(?:\.\d+)?[A-Za-z]+", raw_forecast))
+                        forecast = pd.Timedelta(raw_forecast) if duration else pd.Timestamp(raw_forecast)
+                    except (TypeError, ValueError) as exc:
+                        raise self.error(f"time_diff needs forecast time and interval: {exc}", "planner", binding=name) from exc
+                    if interval <= pd.Timedelta(0) or (duration and forecast < interval):
+                        raise self.error("time_diff interval must be positive and within forecast", "planner", binding=name)
+                    if not duration and self.context.start_time is not None and forecast - pd.Timestamp(self.context.start_time) < interval:
+                        raise self.error("time_diff interval exceeds elapsed forecast time", "planner", binding=name)
+                    ancestor = self._read_ancestor(current)
+                    if ancestor is None or ancestor.request is None:
+                        raise self.error("time_diff needs a field read ancestor", "planner", binding=name)
+                    request = ancestor.request
+                    query = request.query
+                    previous_level = {field: getattr(query, field) for field in _QUERY_FIELDS
+                                      if getattr(query, field) is not None}
+                    previous_level.update(query.extra)
+                    previous = self.read(request.parameter_id, previous_level, f"{name}@-{interval}", origin + f".transforms.{index}.planner",
+                                         forecast_time=_time(forecast - interval))
+                    dependencies = (current, previous)
+                else:
+                    if descriptor.planner is not None:
+                        raise self.error(f"planner for {transform.op!r} is unsupported by workflow compiler", "planner", binding=name)
+                    dependencies = (current,)
+                current = self.add("transform", (name, index, repeat, transform.op, dependencies, args, kwargs),
+                                   dependencies, origin + f".transforms.{index}", (name,), descriptor=transform.op,
+                                   args=args, kwargs=tuple(sorted(kwargs.items())), pure=descriptor.pure,
+                                   reusable=descriptor.reusable)
+            self.bindings[name] = current
+        if item.units is not None:
+            try:
+                target = canonical_unit(item.units)
+            except ValueError as exc:
+                raise self.error(f"invalid target units: {exc}", "units", binding=name) from exc
+            current = self.add("convert_units", (name, target, current), (current,), origin + ".units", (name,),
+                               kwargs=(("units", target),))
+            self.bindings[name] = current
+        if item.compute and len(item.compute.outputs) == 1:
+            self.bindings[item.compute.outputs[0]] = current
+        self.building.pop()
+        self.done.add(name)
+
+    def _read_ancestor(self, node_id: str) -> PlanNode | None:
+        node = self.nodes[node_id]
+        if node.kind == "read":
+            return node
+        for dependency in node.dependencies:
+            found = self._read_ancestor(dependency)
+            if found:
+                return found
+        return None
+
+    def compile(self) -> WorkflowPlan:
+        for name in sorted(self.recipe.spec.data):
+            self.build(name)
+        used = set()
+        for chart in self.recipe.spec.content.charts:
+            for plot in chart.plots:
+                refs = (plot.field,) if plot.field else (plot.vector.u, plot.vector.v)
+                for ref in refs:
+                    used.add(self.bindings[ref])
+        live = set(used)
+        todo = list(used)
+        while todo:
+            for dependency in self.nodes[todo.pop()].dependencies:
+                if dependency not in live:
+                    live.add(dependency)
+                    todo.append(dependency)
+        dead = tuple(PlanIssue("dead_node", f"unused binding(s) {node.bindings!r}", node.origin, node.id,
+                                node.bindings[0] if node.bindings else None)
+                     for node in sorted(self.nodes.values(), key=lambda item: item.id) if node.id not in live)
+        if dead and self.context.strict:
+            raise self.error(f"dead nodes found: {len(dead)}", "dead_node", node_id=dead[0].node_id)
+        pending = set(live)
+        ordered: list[PlanNode] = []
+        while pending:
+            ready = sorted((self.nodes[node_id] for node_id in pending
+                            if all(dep not in pending for dep in self.nodes[node_id].dependencies)), key=lambda node: node.id)
+            if not ready:
+                raise self.error("node dependency cycle", "cycle", node_id=min(pending))
+            for node in ready:
+                ordered.append(node)
+                pending.remove(node.id)
+        batches: dict[tuple[str, str | None, str | None, str], list[str]] = {}
+        for node in ordered:
+            if node.request:
+                key = node.request
+                batches.setdefault((key.provider_slot, key.start_time, key.forecast_time, key.cardinality), []).append(node.id)
+        context = {"start_time": _time(self.context.start_time), "forecast_time": _time(self.context.forecast_time),
+                   "params": self.params, "provider_slot": self.context.provider_slot,
+                   "cardinality": self.context.cardinality}
+        return WorkflowPlan.create(recipe_identity=self.recipe.metadata.name,
+            descriptor_identity=self.registry.manifest()["identity"], context=context,
+            nodes=tuple(ordered), outputs={name: node_id for name, node_id in self.bindings.items() if node_id in live},
+            output_slots={name: self.slots[name] for name, node_id in self.bindings.items() if node_id in live},
+            content=self.recipe.spec.content.model_copy(deep=True), display=self.recipe.spec.display.model_copy(deep=True),
+            issues=dead, read_batches=tuple(tuple(batches[key]) for key in sorted(batches, key=str)))
+
+
+def compile_recipe(recipe: Recipe | LoadedRecipe, context: CompileContext | None = None, *,
+                   registry: OpRegistry | None = None, origin: str | None = None) -> WorkflowPlan:
+    """Compile only declarations and catalog metadata; never query field values."""
+    if isinstance(recipe, LoadedRecipe):
+        origin = origin or recipe.origin
+        recipe = recipe.recipe
+    return _Compiler(recipe, context or CompileContext(), registry or OpRegistry.builtins(),
+                     origin or "<memory>").compile()
