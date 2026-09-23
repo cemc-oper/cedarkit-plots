@@ -29,8 +29,6 @@ dependencies = [
     "xarray",
     "pydantic>=2",
     "PyYAML",
-    "reki>=2026.9.0",
-    "cedarkit-comp>=2025.7.0",
 ]
 
 [project.urls]
@@ -41,7 +39,8 @@ Repository = "https://github.com/cemc-oper/cedarkit-plots.git"
 cedarkit-plots = "cedarkit.plots.cli:main"
 
 [project.optional-dependencies]
-test = ["pytest", "scipy"]
+workflow = ["reki>=2026.9.0", "cedarkit-comp>=2025.7.0"]
+test = ["pytest", "scipy", "reki>=2026.9.0", "cedarkit-comp>=2025.7.0"]
 cov = ["pytest-cov"]
 docs = [
     "sphinx>=7.3",

@@ -81,7 +81,7 @@ tutorials/style_library
 tutorials/colormap
 tutorials/units
 tutorials/templates
-tutorials/recipe_v2
+tutorials/recipe_v3
 ```
 
 ```{toctree}

@@ -151,13 +151,11 @@ name = "cedarkit-plots"
 source = { editable = "." }
 dependencies = [
     { name = "cartopy" },
-    { name = "cedarkit-comp" },
     { name = "matplotlib" },
     { name = "numpy" },
     { name = "pandas" },
     { name = "pydantic" },
     { name = "pyyaml" },
-    { name = "reki" },
     { name = "xarray" },
 ]
 
@@ -177,14 +175,21 @@ docs = [
     { name = "sphinx-design" },
 ]
 test = [
+    { name = "cedarkit-comp" },
     { name = "pytest" },
+    { name = "reki" },
     { name = "scipy" },
+]
+workflow = [
+    { name = "cedarkit-comp" },
+    { name = "reki" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "cartopy", specifier = ">=0.23.0" },
-    { name = "cedarkit-comp", editable = "../cedarkit-comp" },
+    { name = "cedarkit-comp", marker = "extra == 'test'", editable = "../cedarkit-comp" },
+    { name = "cedarkit-comp", marker = "extra == 'workflow'", editable = "../cedarkit-comp" },
     { name = "ipykernel", marker = "extra == 'docs'", specifier = ">=6.29" },
     { name = "linkify-it-py", marker = "extra == 'docs'", specifier = ">=2.0" },
     { name = "matplotlib" },
@@ -196,7 +201,8 @@ requires-dist = [
     { name = "pytest", marker = "extra == 'test'" },
     { name = "pytest-cov", marker = "extra == 'cov'" },
     { name = "pyyaml" },
-    { name = "reki", editable = "../reki" },
+    { name = "reki", marker = "extra == 'test'", editable = "../reki" },
+    { name = "reki", marker = "extra == 'workflow'", editable = "../reki" },
     { name = "scipy", marker = "extra == 'test'" },
     { name = "sphinx", marker = "extra == 'docs'", specifier = ">=7.3" },
     { name = "sphinx-book-theme", marker = "extra == 'docs'", specifier = ">=1.1" },
@@ -204,7 +210,7 @@ requires-dist = [
     { name = "sphinx-design", marker = "extra == 'docs'", specifier = ">=0.6" },
     { name = "xarray" },
 ]
-provides-extras = ["test", "cov", "docs"]
+provides-extras = ["workflow", "test", "cov", "docs"]
 
 [[package]]
 name = "certifi"

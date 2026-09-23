@@ -92,7 +92,7 @@ docs/
 │   ├── style_library.md          Managing style libraries
 │   ├── colormap.md               Selecting and customizing colormaps
 │   ├── templates.md              Map templates and layout
-│   └── recipe_v2.md              YAML plot recipes
+│   └── recipe_v3.md              YAML plot recipes
 ├── gallery/                      Runnable examples, organized by final figure
 ├── api/                          Code-synchronized module and object reference
 └── changelog.md                  Release history

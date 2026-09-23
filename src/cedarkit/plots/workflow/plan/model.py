@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Any, Mapping
+import json
 
 from reki import FieldQuery
 
@@ -111,6 +112,49 @@ class WorkflowPlan:
     @property
     def read_count(self) -> int:
         return sum(node.kind == "read" for node in self.nodes)
+
+    def summary(self) -> str:
+        return (f"WorkflowPlan(recipe={self.recipe_identity!r}, nodes={len(self.nodes)}, "
+                f"reads={self.read_count}, issues={len(self.issues)})")
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a stable, value-only preview without providers or callables."""
+        def value(item: Any) -> Any:
+            if isinstance(item, Mapping):
+                return {str(key): value(entry) for key, entry in sorted(item.items(), key=lambda pair: str(pair[0]))}
+            if isinstance(item, (tuple, list)):
+                return [value(entry) for entry in item]
+            if hasattr(item, "isoformat"):
+                return item.isoformat()
+            return item
+
+        nodes = []
+        for node in self.nodes:
+            entry = {"id": node.id, "kind": node.kind, "dependencies": list(node.dependencies),
+                     "origin": node.origin, "bindings": list(node.bindings), "input_slots": list(node.input_slots),
+                     "descriptor": node.descriptor, "args": value(node.args), "kwargs": value(dict(node.kwargs)),
+                     "output_count": node.output_count, "pure": node.pure, "reusable": node.reusable}
+            if node.request is not None:
+                request = node.request
+                query = request.query
+                entry["request"] = {
+                    "provider_slot": request.provider_slot, "parameter_id": request.parameter_id,
+                    "start_time": request.start_time, "forecast_time": request.forecast_time,
+                    "cardinality": request.cardinality,
+                    "query": value({key: getattr(query, key) for key in (
+                        "parameter", "level_type", "level", "step_type", "time_range", "member", "extra")})}
+            nodes.append(entry)
+        return {"plan_schema_version": 3, "recipe": {"identity": self.recipe_identity,
+                "api_version": self.recipe_version}, "compiler_version": self.compiler_version,
+                "descriptor_identity": self.descriptor_identity, "context": value(self.context),
+                "nodes": nodes, "outputs": dict(sorted(self.outputs.items())),
+                "output_slots": dict(sorted(self.output_slots.items())),
+                "content": self.content.model_dump(mode="json"), "display": self.display.model_dump(mode="json"),
+                "issues": [value(issue.__dict__) for issue in self.issues],
+                "read_batches": [list(batch) for batch in self.read_batches]}
+
+    def to_json(self) -> str:
+        return json.dumps(self.to_dict(), sort_keys=True, separators=(",", ":"), allow_nan=False)
 
     def consumers(self, node_id: str) -> tuple[str, ...]:
         descendants = {node_id}
