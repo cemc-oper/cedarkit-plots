@@ -6,3 +6,5 @@ include tools/palette_sources.json
 include tools/palette_recipes.json
 include tools/palette_audit.json
 include tools/style_palette_map.json
+
+include tools/check_independent_install.py
