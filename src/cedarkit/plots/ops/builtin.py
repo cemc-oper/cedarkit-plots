@@ -23,9 +23,14 @@ def smth9(field: Any, p: float, q: float, wrap: bool, *, context: Any = None) ->
     return apply_to_xarray_values(field, lambda values: implementation(values, p, q, wrap))
 
 
-def time_diff(field: Any, previous: Any, *, context: Any = None) -> Any:
+def time_diff(field: Any, previous: Any, *, accumulation_hours: float | None = None,
+              context: Any = None) -> Any:
     """Numeric half of time_diff; planning supplies the earlier read."""
-    return field - previous
+    result = field - previous
+    result.attrs = dict(field.attrs)
+    if accumulation_hours is not None:
+        result.attrs["accumulation_hours"] = accumulation_hours
+    return result
 
 
 def plan_time_diff(builder: Any, call: Any, context: Any) -> Any:

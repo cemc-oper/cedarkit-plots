@@ -118,8 +118,19 @@ class _Compiler:
             raise self.error(str(exc), "template") from exc
 
     def _context_values(self) -> dict[str, Any]:
-        return {"start_time": _time(self.context.start_time), "forecast_time": _time(self.context.forecast_time),
-                "provider_slot": self.context.provider_slot, "cardinality": self.context.cardinality}
+        values = {"start_time": _time(self.context.start_time), "forecast_time": _time(self.context.forecast_time),
+                  "provider_slot": self.context.provider_slot, "cardinality": self.context.cardinality}
+        if self.context.forecast_time is not None:
+            try:
+                forecast = pd.Timedelta(self.context.forecast_time)
+            except (TypeError, ValueError):
+                pass
+            else:
+                values["forecast_hour"] = f"{int(forecast / pd.Timedelta(hours=1)):03d}"
+                if self.params.get("interval") is not None:
+                    previous = forecast - pd.Timedelta(self.params["interval"])
+                    values["previous_forecast_hour"] = f"{int(previous / pd.Timedelta(hours=1)):03d}"
+        return values
 
     def _content(self):
         content = self.recipe.spec.content
@@ -260,7 +271,8 @@ class _Compiler:
                 current = self.add("transform", (name, index, repeat, transform.op, dependencies, args, kwargs),
                                    dependencies, origin + f".transforms.{index}", (name,), descriptor=transform.op,
                                    args=() if transform.op == "time_diff" else args,
-                                   kwargs=tuple(sorted(kwargs.items())), pure=descriptor.pure,
+                                   kwargs=(("accumulation_hours", float(interval / pd.Timedelta(hours=1))),)
+                                   if transform.op == "time_diff" else tuple(sorted(kwargs.items())), pure=descriptor.pure,
                                    reusable=descriptor.reusable)
             self.bindings[name] = current
         if item.units is not None or item.source_units is not None or item.temperature_kind is not None:
