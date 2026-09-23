@@ -135,7 +135,7 @@ class _Compiler:
     def _content(self):
         content = self.recipe.spec.content
         def titles(items, path):
-            return tuple(title.model_copy(update={"text": str(self.expand(title.text, f"{path}.{title.id}.text"))})
+            return tuple(title.model_copy(update={"text": str(self.expand(title.text, f"{path}.{title.id}.text")).strip()})
                          for title in items)
         def colorbars(items, path):
             return tuple(bar.model_copy(update={"label": str(self.expand(bar.label, f"{path}.{bar.id}.label"))})
