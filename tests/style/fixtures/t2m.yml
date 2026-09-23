@@ -16,7 +16,6 @@ styles:
       index_offset: -2
     levels: [-12, -8, -4, 0, 4, 8, 12, 16, 20, 24, 28, 32, 36, 40, 44]
     fill: true
-    units: celsius
 
   cn_winter:
     type: contour
@@ -26,4 +25,3 @@ styles:
       index_offset: -2
     levels: [-24, -20, -16, -12, -8, -4, 0, 4, 8, 12, 16, 20, 24, 28, 32]
     fill: true
-    units: celsius

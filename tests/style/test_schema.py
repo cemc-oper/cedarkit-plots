@@ -92,13 +92,13 @@ class TestStyleVariant:
         variant = StyleVariant(type="contour")
         assert variant.fill is False
 
-    def test_units_known(self):
-        variant = StyleVariant(type="contour", units="celsius")
-        assert variant.units == "celsius"
+    def test_expected_units_known(self):
+        variant = StyleVariant(type="contour", expected_units="celsius")
+        assert variant.expected_units == "degC"
 
-    def test_units_unknown_rejected(self):
-        with pytest.raises(ValueError, match="unknown units"):
-            StyleVariant(type="contour", units="fahrenheit")
+    def test_legacy_units_rejected(self):
+        with pytest.raises(ValueError, match="Extra inputs are not permitted"):
+            StyleVariant(type="contour", units="celsius")
 
     def test_barb_rejects_contour_keys(self):
         with pytest.raises(ValueError, match="contour keys"):
@@ -149,12 +149,13 @@ styles:
     type: contour
     levels: [-12, 0, 12]
     fill: true
-    units: celsius
+    expected_units: degC
+    expected_temperature_kind: absolute
 """)
         style_file = load_style_file(path)
         assert style_file.id == "t2m"
         assert len(style_file.criteria) == 2
-        assert style_file.styles["cn"].units == "celsius"
+        assert style_file.styles["cn"].expected_units == "degC"
 
     def test_id_must_match_file_name(self, tmp_path):
         path = write_style(tmp_path, "t2m.yml", """
@@ -183,7 +184,7 @@ criteria:
 styles:
   cn:
     type: contour
-    units: fahrenheit
+    expected_units: parsecs
 """)
         with pytest.raises(StyleFileError) as exc_info:
             load_style_file(path)

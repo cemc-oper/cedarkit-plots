@@ -3,7 +3,7 @@ import importlib.metadata
 import math
 import os
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, Union
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Union
 
 import numpy as np
 import matplotlib
@@ -26,7 +26,6 @@ from .schema import (
     StyleVariant,
     load_style_file,
 )
-from .units import get_unit_transform
 from cedarkit.plots.units import canonical_unit, validate_temperature_kind
 
 
@@ -711,12 +710,6 @@ class StyleRegistry:
             if reasons:
                 raise ValueError(f"style {profile}.{spec.id}:{variant_name} ({path}): {'; '.join(reasons)}")
         return build_style(f"{profile}.{spec.id}", variant_name, variant_spec)
-
-    def get_transform(self, field_id: str, variant: Optional[str] = None) -> Optional[Callable]:
-        """Existing workflow conversion hook; removed with D13's old engine."""
-        _, _, _, variant_spec, _ = self._lookup(field_id, variant)
-        return get_unit_transform(variant_spec.units)
-
 
 _default_registry: Optional[StyleRegistry] = None
 

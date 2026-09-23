@@ -137,7 +137,7 @@ highlight:
 快照，在登记、更新和渲染时校验；不执行转换或时间差分。
 显式转换使用 [数据准备接口](./units.md)，返回新数组与转换记录。
 CEMC 全部变体已声明单位；降水变体还声明累计时段，`get_style` 必须收到对应 metadata/data。
-旧 `units/get_transform/style_units` 暂由尚未迁移的 workflow 使用，D13 删除。
+旧 `units/get_transform/style_units` 隐式转换路径已随 D13-07 删除。
 
 ## profile 加载与优先级
 

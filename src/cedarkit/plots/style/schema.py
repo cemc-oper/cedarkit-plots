@@ -17,7 +17,6 @@ from typing import Any, Dict, List, Literal, Optional, Union
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from .units import UNIT_TRANSFORMS
 from cedarkit.plots.units import canonical_unit, validate_temperature_kind
 
 
@@ -246,9 +245,7 @@ class StyleVariant(StrictModel):
     flagcolor: Optional[str] = None
     barb_increments: Optional[Dict[str, float]] = None
 
-    # unit conversion applied to the data (built-in table in style/units.py)
-    units: Optional[str] = None
-    # v2 data values are already converted; styles only state their contract.
+    # Data values are already prepared; styles only state their contract.
     expected_units: Optional[str] = None
     expected_temperature_kind: Optional[Literal["absolute", "difference"]] = None
     # Duration of the already prepared accumulation, never forecast lead time.
@@ -258,14 +255,6 @@ class StyleVariant(StrictModel):
     @classmethod
     def canonical_expected_units(cls, value: Optional[str]) -> Optional[str]:
         return canonical_unit(value) if value is not None else None
-
-    @field_validator("units")
-    @classmethod
-    def known_units(cls, value: Optional[str]) -> Optional[str]:
-        if value is not None and value not in UNIT_TRANSFORMS:
-            known = ", ".join(sorted(UNIT_TRANSFORMS))
-            raise ValueError(f"unknown units {value!r}; known units: {known}")
-        return value
 
     @model_validator(mode="after")
     def check_type_fields(self) -> "StyleVariant":

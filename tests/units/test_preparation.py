@@ -203,7 +203,7 @@ def test_all_cemc_variants_declare_known_units(identifier, unit):
     spec = registry._lookup(identifier)[1]
     for name, variant in spec.styles.items():
         assert variant.expected_units == ('degC' if (identifier, name) == ('t_dew_t','cn_t') else unit)
-        assert variant.units is None  # no style-driven conversion hook
+        assert "units" not in type(variant).model_fields  # no style-driven conversion hook
     if identifier in ('sf', 'rain_snow'):
         assert spec.styles['cn'].accumulation_hours == 24
 

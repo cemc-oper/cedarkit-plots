@@ -60,5 +60,4 @@ qdiv 仅支持上述明确单位间缩放，实际源字段的单位确认留给
 D13 编译阶段可用 `conversion_rule(source, target, temperature_kind=...)`
 检查声明并获得 scale/offset，不读字段值；执行阶段调用同一 `prepare_field`
 并核对真实源 metadata，保留返回记录。向量使用 `prepare_vector`。
-旧 plan/units.py 与 style.units/style_units 仅留给待替换的旧执行链，D13
-应删除这些重复路径；新快绘不得调用它们。
+旧 plan/units.py 与 style.units/style_units 已随 D13-07 删除；新快绘不得调用它们。

@@ -126,12 +126,6 @@ class TestGetStyleH500:
             np.asarray(label_style.colors)[:, :3], CN_HGT20[[15]][:, :3]
         )
 
-    def test_units_transform(self, registry):
-        transform = registry.get_transform("h_500")
-        assert transform is not None
-        assert transform(5880) == 588
-
-
 class TestGetStyleT2m:
     def test_optimal_variant(self, registry):
         style = registry.get_style("t2m")
@@ -150,14 +144,6 @@ class TestGetStyleT2m:
         ) - 2
         expected = mcolors.ListedColormap(color_map(color_index))
         np.testing.assert_allclose(style.colors.colors, expected.colors)
-
-    def test_units_transform(self, registry):
-        transform = registry.get_transform("t2m")
-        assert transform(273.15) == pytest.approx(0.0)
-
-    def test_no_units_returns_none(self, registry):
-        assert registry.get_transform("wind") is None
-
 
 class TestGetStyleBarb:
     def test_barb_style(self, registry):

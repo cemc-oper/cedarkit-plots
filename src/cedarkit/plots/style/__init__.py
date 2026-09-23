@@ -146,4 +146,3 @@ from .registry import (  # noqa: E402
     resolve_style,
 )
 from .schema import StyleFile, StyleFileError, load_style_file  # noqa: E402
-from .units import get_unit_transform  # noqa: E402

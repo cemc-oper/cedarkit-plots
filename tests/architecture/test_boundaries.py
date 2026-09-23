@@ -35,6 +35,12 @@ def test_plots_does_not_import_upper_runtime_packages():
     )
 
 
+def test_removed_workflow_implementations_do_not_return():
+    for name in ("engine", "plan", "recipe"):
+        assert not list((PACKAGE_DIR / name).rglob("*.py")), name
+    assert not (PACKAGE_DIR / "style" / "units.py").exists()
+
+
 def test_core_import_does_not_load_workflow_or_business_packages():
     script = """
 import importlib.abc
