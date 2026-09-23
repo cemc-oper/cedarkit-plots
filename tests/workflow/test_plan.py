@@ -125,6 +125,21 @@ def test_distinct_requests_at_one_time_share_batch_and_bad_op_has_context():
     assert caught.value.code == "unknown_op"
 
 
+@pytest.mark.parametrize("parameter,level,expected_type,expected_level", (
+    ("cedarkit.h", {"first_level_type": 100, "first_level": 500}, "isobaricInhPa", 500),
+    ("cedarkit.u", {"first_level_type": 103, "first_level": 10}, "heightAboveGround", 10),
+    ("cedarkit.shr", {"first_level_type": 103, "first_level": 3000,
+                      "second_level_type": 103, "second_level": 0}, "heightAboveGroundLayer", 3000),
+))
+def test_catalog_surface_levels_bind_to_searchable_query(parameter, level, expected_type, expected_level):
+    plan = compile_recipe(recipe({"result": {"field": {"parameter": parameter, "level": level}}}))
+    query = next(node.request.query for node in plan.nodes if node.request)
+    assert query.level_type == expected_type
+    assert query.level == expected_level
+    assert "first_level" not in query.extra
+    assert "second_level" not in query.extra
+
+
 def test_multi_output_slots_are_stable():
     data = {"source": {"field": {"parameter": "cedarkit.t2m"}},
             "diagnostic": {"compute": {"op": "split", "inputs": ["source"],

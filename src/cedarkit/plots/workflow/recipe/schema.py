@@ -117,6 +117,7 @@ class Plot(StrictModel):
     targets: str | tuple[str, ...] = "main"
     data_crs: Literal["plate_carree", "geodetic"] | None = None
     vector_basis: Literal["grid", "earth"] | None = None
+    max_vectors: int | None = PydanticField(default=None, gt=0)
     zorder: float | None = None
 
     _id = field_validator("id")(_identifier)
@@ -142,6 +143,8 @@ class Plot(StrictModel):
             _identifier(self.field)
         if self.method != "barbs" and self.vector_basis is not None:
             raise ValueError("vector_basis is only valid for barbs")
+        if self.method != "barbs" and self.max_vectors is not None:
+            raise ValueError("max_vectors is only valid for barbs")
         return self
 
 

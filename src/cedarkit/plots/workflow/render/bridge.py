@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from math import ceil, sqrt
 from typing import Any
 
 import cartopy.crs as ccrs
@@ -158,6 +159,19 @@ def _display(value: Display | Mapping[str, Any]) -> Display:
     return value if isinstance(value, Display) else Display.model_validate(value)
 
 
+def _sample_barbs(data: tuple[Any, Any], max_vectors: int | None) -> tuple[Any, Any]:
+    if max_vectors is None or data[0].size <= max_vectors:
+        return data
+    if data[0].dims != data[1].dims or data[0].shape != data[1].shape or data[0].ndim != 2:
+        raise ValueError("barb sampling requires aligned two-dimensional vectors")
+    rows, columns = data[0].shape
+    stride = ceil(sqrt(rows * columns / max_vectors))
+    while ceil(rows / stride) * ceil(columns / stride) > max_vectors:
+        stride += 1
+    indexers = {dim: slice(None, None, stride) for dim in data[0].dims}
+    return data[0].isel(indexers), data[1].isel(indexers)
+
+
 def render_result(
     result: WorkflowResult, *, display: Display | Mapping[str, Any] | None = None,
     style_registry: StyleRegistry | None = None, templates: Mapping[str, Any] | None = None,
@@ -206,7 +220,8 @@ def render_result(
                 if plot.zorder is not None:
                     kwargs["zorder"] = plot.zorder
                 if plot.method == "barbs":
-                    layer = chart.barbs(*data, vector_basis=plot.vector_basis or "grid", **kwargs)
+                    layer = chart.barbs(*_sample_barbs(data, plot.max_vectors),
+                                        vector_basis=plot.vector_basis or "grid", **kwargs)
                 else:
                     layer = getattr(chart, plot.method)(data, **kwargs)
                 layers[(chart_spec.id, plot.id)] = layer

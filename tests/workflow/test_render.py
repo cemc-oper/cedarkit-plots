@@ -186,7 +186,7 @@ def test_vector_method_uses_two_named_bindings():
                           "v": {"field": {"parameter": "cedarkit.v"}}},
                  "content": {"charts": [{"id": "wind", "plots": [{
                      "id": "barbs", "method": "barbs", "vector": {"u": "u", "v": "v"},
-                     "style": "cemc.wind:cn", "vector_basis": "grid"}]}]}},
+                     "style": "cemc.wind:cn", "vector_basis": "grid", "max_vectors": 6}]}]}},
     }
 
     class WindProvider:
@@ -194,8 +194,12 @@ def test_vector_method_uses_two_named_bindings():
             return [field().copy(data=np.full((4, 5), 3 if request.key.parameter_id == "cedarkit.u" else 4))
                     .assign_attrs(units="m/s") for request in requests]
 
-    panel = render_result(compile_recipe(load_recipe(document)).execute(WindProvider()))
+    result = compile_recipe(load_recipe(document)).execute(WindProvider())
+    panel = render_result(result)
     layer = panel.charts["wind"].layers["barbs"]
     assert layer.method == "barbs"
     assert tuple(layer.results) == ("main",)
+    assert result.outputs["u"].size == 20
+    assert layer.data[0].size <= 6
+    assert layer.data[0].shape == layer.data[1].shape
     panel.close()

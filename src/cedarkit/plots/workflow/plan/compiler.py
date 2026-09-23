@@ -18,6 +18,34 @@ from ..recipe import LoadedRecipe, Recipe
 from .model import FieldRequest, PlanIssue, PlanNode, RecipeCompileError, WorkflowPlan
 
 _QUERY_FIELDS = {"level_type", "level", "step_type", "time_range", "member"}
+_FIRST_SURFACE_TYPES = {100: "isobaricInhPa", 103: "heightAboveGround"}
+
+
+def _normalize_field_level(level: Mapping[str, Any]) -> dict[str, Any]:
+    """Bind catalog surface selectors to searchable reki query fields."""
+    result = dict(level)
+    first = result.pop("first_level", None)
+    first_type = result.pop("first_level_type", None)
+    second = result.pop("second_level", None)
+    second_type = result.pop("second_level_type", None)
+    if first is not None:
+        if "level" in result and result["level"] != first:
+            raise ValueError("level and first_level disagree")
+        result["level"] = first
+    if first_type is not None:
+        result["typeOfFirstFixedSurface"] = first_type
+        inferred = _FIRST_SURFACE_TYPES.get(int(first_type))
+        if inferred is not None:
+            if second is not None and int(first_type) == 103:
+                inferred = "heightAboveGroundLayer"
+            if "level_type" in result and result["level_type"] != inferred:
+                raise ValueError("level_type and first_level_type disagree")
+            result["level_type"] = inferred
+    if second_type is not None:
+        result["typeOfSecondFixedSurface"] = second_type
+    if second is not None:
+        result["scaledValueOfSecondFixedSurface"] = second
+    return result
 
 
 def _jsonable(value: Any) -> Any:
@@ -160,7 +188,10 @@ class _Compiler:
 
     def read(self, parameter: str, level: Mapping[str, Any], binding: str, origin: str,
              *, forecast_time: str | None = None) -> str:
-        expanded = self.expand(level, origin)
+        try:
+            expanded = _normalize_field_level(self.expand(level, origin))
+        except (TypeError, ValueError) as exc:
+            raise self.error(f"invalid field level at {origin}: {exc}", "field_query", binding=binding) from exc
         extra = {key: value for key, value in expanded.items() if key not in _QUERY_FIELDS}
         standard = {key: value for key, value in expanded.items() if key in _QUERY_FIELDS}
         try:
