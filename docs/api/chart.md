@@ -12,28 +12,10 @@ mystnb:
    :show-inheritance:
 ```
 
-## Panel
+## Core content and rendering types
 
 ```{eval-rst}
-.. automodule:: cedarkit.plots.chart.panel
-   :members:
-   :undoc-members:
-   :show-inheritance:
-```
-
-## Chart
-
-```{eval-rst}
-.. automodule:: cedarkit.plots.chart.chart
-   :members:
-   :undoc-members:
-   :show-inheritance:
-```
-
-## Layer
-
-```{eval-rst}
-.. automodule:: cedarkit.plots.chart.layer
+.. automodule:: cedarkit.plots.chart.core
    :members:
    :undoc-members:
    :show-inheritance:

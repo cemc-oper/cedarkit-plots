@@ -21,6 +21,7 @@ from cedarkit.plots.config import (
     GridlineSpec,
     LayoutSpec,
     MapFeatureSpec,
+    MapInfo,
     Rect,
     SubplotSpec,
     TextPosition,
@@ -40,7 +41,6 @@ from cedarkit.plots.domains.remaining_config import (
 )
 from cedarkit.plots.errors import ConfigError
 from cedarkit.plots.map import MapType
-from cedarkit.plots.painter.map_painter import MapInfo
 from cedarkit.plots.types import AreaRange
 
 from . import ChartTemplate, PanelTemplate
@@ -283,7 +283,7 @@ def cn_area_chart(
     main_map_info: MapInfo | None = None,
     sub_map_info: MapInfo | None = None,
 ) -> ChartTemplate:
-    """Return the configuration equivalent of ``CnAreaMapTemplate``."""
+    """Return a one-Chart Panel preset for a caller-supplied China area."""
 
     domain = _domain_from_area(CN_AREA_DOMAIN, domain=domain, area=area)
     with_inset = _with_sub_area(with_inset, with_sub_area)
@@ -623,11 +623,6 @@ def north_polar(**kwargs: Any) -> PanelTemplate:
     return _panel_template(north_polar_chart(**kwargs))
 
 
-# Explicit aliases make the old ``GlobalMapTemplate`` name easy to map while
-# keeping the public factories consistently named with the D09/D10 entries.
-global_map_chart = global_chart
-
-
 __all__ = [
     "cn_area",
     "cn_area_chart",
@@ -637,7 +632,6 @@ __all__ = [
     "global_area_chart",
     "global_chart",
     "global_map",
-    "global_map_chart",
     "north_polar",
     "north_polar_chart",
 ]

@@ -1,9 +1,4 @@
-"""Shared value-level domains for the remaining D11 presets.
-
-The declarations in this module are intentionally independent from the
-legacy template classes.  They can therefore be imported by configuration
-factories without importing a rendering protocol or a map painter.
-"""
+"""Shared geographic domain values for the regional presentation presets."""
 
 from __future__ import annotations
 
@@ -15,9 +10,8 @@ from .domain import Domain
 from .east_asia_config import EAST_ASIA_AREA
 
 
-CN_AREA = EAST_ASIA_AREA
 CN_AREA_DOMAIN = Domain(
-    extent=CN_AREA.to_tuple(),
+    extent=EAST_ASIA_AREA.to_tuple(),
     extent_crs=ccrs.PlateCarree(),
     map_crs=ccrs.PlateCarree(),
 )
@@ -64,16 +58,8 @@ NORTH_POLAR_DOMAIN = Domain(
 )
 
 
-# ``CN_DOMAIN`` is a useful descriptive alias for callers that do not use
-# the legacy AreaRange name.  Keep the canonical CnArea spelling available as
-# well because it is the public preset name in the old API.
-CN_DOMAIN = CN_AREA_DOMAIN
-
-
 __all__ = [
-    "CN_AREA",
     "CN_AREA_DOMAIN",
-    "CN_DOMAIN",
     "EUROPE_ASIA_AREA",
     "EUROPE_ASIA_DOMAIN",
     "GLOBAL_AREA",

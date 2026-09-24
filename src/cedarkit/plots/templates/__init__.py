@@ -120,7 +120,6 @@ from .regions import (
     global_area_chart,
     global_chart,
     global_map,
-    global_map_chart,
     north_polar,
     north_polar_chart,
 )
@@ -143,7 +142,6 @@ __all__ = [
     "global_area_chart",
     "global_chart",
     "global_map",
-    "global_map_chart",
     "north_polar",
     "north_polar_chart",
     "time_profile",

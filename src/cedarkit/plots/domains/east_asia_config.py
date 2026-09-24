@@ -1,14 +1,10 @@
-"""Shared value-level EastAsia domain defaults.
-
-This module contains only immutable-or-snapshot-friendly declarations.  It
-does not import the legacy template execution chain or load map resources.
-"""
+"""East Asia domain and map annotation values for presentation presets."""
 
 from __future__ import annotations
 
 from cartopy import crs as ccrs
 
-from cedarkit.plots.painter.map_painter import MapInfo
+from cedarkit.plots.config import MapInfo
 from cedarkit.plots.types import AreaRange
 
 from .domain import Domain

@@ -7,8 +7,9 @@
 ![GitHub Action Workflow Status](https://github.com/cemc-oper/cedarkit-plots/actions/workflows/ci.yaml/badge.svg)
 
 `cedarkit-plots` is a low-level meteorological plotting library built on
-Matplotlib and Cartopy. It provides map templates, panels and charts, plotting
-styles, colormaps, and plot recipes. It is the plotting engine behind
+Matplotlib and Cartopy. It provides Panel/Chart content handles, reusable
+`PlotLayer` values, configuration presets, plotting styles, colormaps, and
+workflow recipes. It is the plotting library behind
 higher-level packages such as `cedar-graph`.
 
 > This project is at the Sandbox maturity level. Its public API and recipe
@@ -16,10 +17,9 @@ higher-level packages such as `cedar-graph`.
 
 ## Features
 
-- Compose multi-panel meteorological figures with `Panel`, `Chart`, and
-  `Layer`.
+- Compose meteorological figures with `Panel`, `Chart`, and `PlotLayer`.
 - Quickly draw East Asia, Europe-Asia, global, North Polar, and ensemble
-  forecast products with built-in map templates.
+  forecast products with built-in configuration presets.
 - Define contours, fills, wind barbs, and colorbars with reusable style
   libraries.
 - Use bundled NCL colormaps and China shapefile resources.
@@ -50,25 +50,20 @@ This example uses synthetic data provided by the project, so it does not require
 any operational data:
 
 ```python
-import pandas as pd
+import numpy as np
+import xarray as xr
 
-from cedarkit.plots.chart import Panel
-from cedarkit.plots.domains import EastAsiaMapTemplate
-from cedarkit.plots.testing import east_asia_temperature_field, temperature_style
+from cedarkit.plots import quickplot
 
-field = east_asia_temperature_field()
-style = temperature_style()
-
-panel = Panel(domain=EastAsiaMapTemplate())
-panel.plot(field, style=style)
-panel.set_title(
-    graph_name="2m Temperature (°C)",
-    system_name="cedarkit-plots demo",
-    start_time=pd.Timestamp("2024-11-09 00:00:00"),
-    forecast_time=pd.Timedelta("24h"),
+x, y = np.meshgrid(np.linspace(-1, 1, 30), np.linspace(-1, 1, 24))
+temperature = xr.DataArray(
+    273.15 + 15 + 20*x + 8*np.sin(3*y), dims=("y", "x"),
+    attrs={"units": "K", "temperature_kind": "absolute",
+           "cemc_name": "t2m", "standard_name": "air_temperature"},
 )
-panel.add_colorbar(style=style)
-panel.save("temperature.png")
+with quickplot.plot(temperature, units="degC", title="2m temperature",
+                    colorbar_label="degC", output="temperature.png") as result:
+    print(result.conversions[0][0])
 ```
 
 See [Quick start](docs/getting_started/quick_start.md) for a walkthrough.

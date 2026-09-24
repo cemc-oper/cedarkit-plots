@@ -3,10 +3,6 @@
 from __future__ import annotations
 
 from datetime import datetime
-import os
-from pathlib import Path
-import subprocess
-import sys
 
 import matplotlib
 
@@ -35,7 +31,6 @@ from cedarkit.plots.templates import (
     global_area_chart,
     global_chart,
     global_map,
-    global_map_chart,
     north_polar,
     north_polar_chart,
     time_profile,
@@ -60,35 +55,6 @@ def field() -> xr.DataArray:
         dims=("level", "step"),
         coords={"level": np.array([1000, 850, 700, 500]), "step": np.array([0, 6, 12, 18, 24])},
     )
-
-
-def test_new_template_import_does_not_load_legacy_template_modules():
-    source = """
-import sys
-import cedarkit.plots.templates
-legacy = {
-    'cedarkit.plots.template',
-    'cedarkit.plots.chart.panel',
-    'cedarkit.plots.chart.chart',
-    'cedarkit.plots.domains.map_template',
-    'cedarkit.plots.domains.europe_asia',
-    'cedarkit.plots.domains.global_template',
-    'cedarkit.plots.domains.north_polar',
-    'cedarkit.plots.domains.time_profile_template',
-}
-assert not legacy.intersection(sys.modules)
-"""
-    env = dict(os.environ)
-    env["MPLCONFIGDIR"] = "/tmp/cedarkit-d11-mpl"
-    result = subprocess.run(
-        [sys.executable, "-c", source],
-        check=True,
-        cwd=Path(__file__).parents[2],
-        env=env,
-        capture_output=True,
-        text=True,
-    )
-    assert result.stderr == ""
 
 
 def test_remaining_map_factories_preserve_domain_projection_and_features():
@@ -189,8 +155,7 @@ def test_xy_and_time_profile_are_normal_subplots_with_declarative_formatter():
     panel.close()
 
 
-def test_global_map_chart_is_an_alias_and_direct_custom_basemap_wins():
-    assert global_map_chart is global_chart
+def test_global_chart_accepts_direct_custom_basemap():
     custom = empty_basemap()
     preset = global_chart(main_basemap=custom, map_info=None)
     assert preset.subplots["main"].basemap == custom

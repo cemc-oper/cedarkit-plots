@@ -102,7 +102,7 @@ def _check_position(value: Any, name: str) -> Cell | Rect:
 
 
 def _default_basemap() -> BasemapSpec:
-    """Return the legacy China map appearance without map annotations."""
+    """Return the standard China map appearance without map annotations."""
 
     return BasemapSpec(
         map_type=MapType.Portrait,

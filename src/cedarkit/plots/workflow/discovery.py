@@ -21,7 +21,7 @@ class WorkflowDiscovery:
 
 def discover_workflow(*, entry_points: Mapping[str, Iterable[Any]] | None = None,
                       strict: bool = True) -> WorkflowDiscovery:
-    """Discover providers in stable order; never import the legacy engine."""
+    """Discover workflow providers in stable order."""
     ops = OpRegistry.builtins()
     domains = DomainRegistry.builtins()
     recipes = RecipeCatalog()

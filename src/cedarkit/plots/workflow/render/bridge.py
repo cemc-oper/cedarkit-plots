@@ -13,12 +13,11 @@ from ...config import (
     UNSET, AnnotationSpec, AxisSpec, BasemapSpec, BorderSpec, Cell,
     ChartRule, ChartSelector, ChartSpec, ColorbarSpec, DecorationSpec,
     GridlineSpec, LayoutSpec, MapFeatureSpec, Rect, SlotSpec, SubplotSpec,
-    TextPosition, Theme, TitleSpec,
+    MapInfo, TextPosition, Theme, TitleSpec,
 )
 from ...domains import Domain
 from ...domains.registry import DomainRegistry
 from ...map import MapType
-from ...painter.map_painter import MapInfo
 from ...style.registry import StyleRegistry, get_default_registry
 from ...templates import PanelTemplate
 from ..recipe.schema import Display

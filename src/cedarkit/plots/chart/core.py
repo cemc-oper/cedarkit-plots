@@ -1,11 +1,4 @@
-"""The D04 logical content model and minimal XY renderer.
-
-The legacy template implementation remains in :mod:`.panel` and
-:mod:`.chart`.  ``Panel`` below is a small compatibility facade: a new
-``Panel()`` owns logical configuration and content until ``render()``, while
-``Panel(domain=...)`` delegates to the legacy implementation used by the
-pre-D04 API.
-"""
+"""Stable logical plotting content and its renderer."""
 
 from __future__ import annotations
 
@@ -50,7 +43,7 @@ from cedarkit.plots.config import (
     validate_config,
 )
 from cedarkit.plots.errors import ClosedError, ContentError, Issue, RenderError, RenderRequiredError
-from cedarkit.plots.painter.component_bindutils import add_map_info_text
+from cedarkit.plots.map.annotations import add_map_info_text
 from cedarkit.plots.units import canonical_unit, unit_dimension, validate_temperature_kind
 from cedarkit.plots.style import BarbStyle, ContourLabelStyle, ContourStyle, LevelStep, Style
 
@@ -332,7 +325,7 @@ class PlotLayer:
 class Chart:
     """A stable logical Chart owned by a new-API Panel."""
 
-    def __init__(self, panel: "_PanelImpl", chart_id: str, role: str | None = None) -> None:
+    def __init__(self, panel: "Panel", chart_id: str, role: str | None = None) -> None:
         self._panel = panel
         self._id = chart_id
         self._role = role
@@ -363,7 +356,7 @@ class Chart:
 
     @property
     def panel(self) -> "Panel":
-        return self._panel.public_panel
+        return self._panel
 
     @property
     def layers(self) -> Mapping[str, PlotLayer]:
@@ -524,12 +517,11 @@ def _merge_template_value(template_value: Any, user_value: Any) -> Any:
     return merge_config(template_value, user_value)
 
 
-class _PanelImpl:
-    """Implementation behind the public compatibility facade."""
+class Panel:
+    """Logical plot content and the owner of its rendered Figure."""
 
     def __init__(
         self,
-        public_panel: "Panel",
         *,
         template: Any = None,
         layout: Any = UNSET,
@@ -555,7 +547,6 @@ class _PanelImpl:
                 columns=columns if columns is not UNSET else UNSET,
             )
             layout = merge_config(layout, shortcut)
-        self.public_panel = public_panel
         self._layout = layout
         self._theme = theme
         self._chart_defaults = chart_defaults
@@ -1235,7 +1226,7 @@ class _PanelImpl:
         self._panel_titles.clear()
         self._closed = True
 
-    def __enter__(self) -> "_PanelImpl":
+    def __enter__(self) -> "Panel":
         self._ensure_open()
         return self
 
@@ -2280,10 +2271,8 @@ def _render_basemap(ax: Any, subplot_spec: SubplotSpec) -> None:
         circle = mpath.Path(vertices * radius + center)
         ax.set_boundary(circle, transform=ax.transAxes)
     elif boundary == "extent" and not isinstance(map_crs, ccrs.PlateCarree):
-        # LambertConformal used by EuropeAsia needs the same rectangular
-        # clipping path as the legacy template.  PlateCarree keeps Cartopy's
-        # normal extent boundary, which is already equivalent to the old
-        # EastAsia/CnArea behavior.
+        # LambertConformal used by EuropeAsia needs a rectangular clipping
+        # path. PlateCarree keeps Cartopy's normal extent boundary.
         xmin, xmax, ymin, ymax = domain.extent
         resolution = 1
         vertices = (
@@ -2430,209 +2419,6 @@ def _create_subplots(
                 path=("charts", chart.id, "subplots"),
             )
     return result
-
-
-class Panel:
-    """Public Panel facade supporting both D04 and the legacy domain API."""
-
-    def __init__(
-        self,
-        *,
-        template: Any = None,
-        layout: Any = UNSET,
-        theme: Any = UNSET,
-        chart_defaults: Any = UNSET,
-        chart_rules: Any = UNSET,
-        decorations: Any = UNSET,
-        rows: Any = UNSET,
-        columns: Any = UNSET,
-        domain: Any = UNSET,
-        schema: Any = None,
-    ) -> None:
-        if domain is not UNSET:
-            from .panel import Panel as LegacyPanel
-
-            self._legacy = LegacyPanel(domain=domain, schema=schema)
-            self._impl = None
-        else:
-            if schema is not None:
-                raise TypeError("schema is only valid with the legacy domain API")
-            self._legacy = None
-            self._impl = _PanelImpl(
-                self, template=template, layout=layout, theme=theme,
-                chart_defaults=chart_defaults, chart_rules=chart_rules,
-                decorations=decorations, rows=rows, columns=columns,
-            )
-
-    def _target(self) -> Any:
-        return self._legacy if self._legacy is not None else self._impl
-
-    def __getattr__(self, name: str) -> Any:
-        target = object.__getattribute__(self, "_target")()
-        return getattr(target, name)
-
-    def __enter__(self) -> "Panel":
-        target = self._target()
-        target.__enter__()
-        return self
-
-    def __exit__(self, exc_type: Any, exc_value: Any, traceback: Any) -> bool:
-        return self._target().__exit__(exc_type, exc_value, traceback)
-
-    def add_chart(
-        self,
-        *,
-        id: str | None = None,
-        role: str | None = None,
-        row: Any = UNSET,
-        column: Any = UNSET,
-        rowspan: int = 1,
-        colspan: int = 1,
-        domain: Any = UNSET,
-    ) -> Any:
-        target = self._target()
-        if self._legacy is not None:
-            if domain is UNSET:
-                raise TypeError("legacy add_chart requires domain")
-            return target.add_chart(domain=domain)
-        if domain is not UNSET:
-            raise TypeError("domain is only valid with the legacy Panel constructor")
-        return target.add_chart(id=id, role=role, row=row, column=column, rowspan=rowspan, colspan=colspan)
-
-    def configure(self, *, layout: Any = UNSET, theme: Any = UNSET, chart_defaults: Any = UNSET, chart_rules: Any = UNSET, decorations: Any = UNSET) -> None:
-        if self._legacy is not None:
-            raise ConfigError("configure is unavailable for the legacy domain API", code="legacy_api")
-        return self._impl.configure(layout=layout, theme=theme, chart_defaults=chart_defaults, chart_rules=chart_rules, decorations=decorations)
-
-    def apply_template(self, template: Any = None) -> None:
-        if self._legacy is not None:
-            raise ConfigError("apply_template is unavailable for the legacy domain API", code="legacy_api")
-        return self._impl.apply_template(template)
-
-    def render(self, *, force: bool = False) -> Figure:
-        if self._legacy is not None:
-            return self._legacy.fig
-        return self._impl.render(force=force)
-
-    def save(self, path: Any, *, dpi: Any = None, format: Any = None, bbox_inches: Any = "tight", transparent: bool = False) -> None:
-        if self._legacy is not None:
-            return self._legacy.save(path, dpi=dpi, format=format, bbox_inches=bbox_inches, transparent=transparent)
-        return self._impl.save(path, dpi=dpi, format=format, bbox_inches=bbox_inches, transparent=transparent)
-
-    def show(self, *, block: bool | None = None) -> None:
-        if self._legacy is not None:
-            return self._legacy.show()
-        return self._impl.show(block=block)
-
-    def close(self) -> None:
-        if self._legacy is not None:
-            if self._legacy._fig is not None:
-                plt.close(self._legacy._fig)
-            return
-        return self._impl.close()
-
-    def validate(self, *, complete: bool = False):
-        if self._legacy is not None:
-            raise ConfigError("validate is unavailable for the legacy domain API", code="legacy_api")
-        return self._impl.validate(complete=complete)
-
-    def set_title(
-        self,
-        text: Any = UNSET,
-        *,
-        id: str = "title",
-        graph_name: Any = UNSET,
-        system_name: Any = UNSET,
-        start_time: Any = UNSET,
-        forecast_time: Any = UNSET,
-    ) -> None:
-        if self._legacy is not None:
-            if text is not UNSET:
-                raise TypeError("legacy set_title does not accept text")
-            return self._legacy.set_title(
-                graph_name=graph_name,
-                system_name=system_name,
-                start_time=start_time,
-                forecast_time=forecast_time,
-            )
-        if text is UNSET:
-            raise TypeError("new set_title requires text")
-        return self._impl._set_title(None, text, id=id)
-
-    def colorbar(
-        self,
-        layers: PlotLayer | Sequence[PlotLayer],
-        *,
-        id: str | None = None,
-        subplots: str = "main",
-        label: str | None = None,
-    ) -> str:
-        if self._legacy is not None:
-            raise ConfigError("colorbar is unavailable for the legacy domain API", code="legacy_api")
-        return self._impl._register_colorbar(
-            None,
-            layers,
-            id=id,
-            subplots=subplots,
-            label=label,
-        )
-
-    def remove_colorbar(self, id: str) -> None:
-        if self._legacy is not None:
-            raise ConfigError("remove_colorbar is unavailable for the legacy domain API", code="legacy_api")
-        return self._impl._remove_colorbar(id)
-
-    def share_scale(self, layers: PlotLayer | Sequence[PlotLayer], *, id: str | None = None) -> str:
-        if self._legacy is not None:
-            raise ConfigError("share_scale is unavailable for the legacy domain API", code="legacy_api")
-        return self._impl._register_scale(layers, id=id)
-
-    def remove_scale(self, id: str) -> None:
-        if self._legacy is not None:
-            raise ConfigError("remove_scale is unavailable for the legacy domain API", code="legacy_api")
-        return self._impl._remove_scale(id)
-
-    @property
-    def charts(self) -> Mapping[str, Chart]:
-        if self._legacy is not None:
-            return self._legacy.charts
-        return self._impl.charts
-
-    @property
-    def fig(self) -> Figure | None:
-        if self._legacy is not None:
-            return self._legacy.fig
-        return self._impl.fig
-
-    @property
-    def revision(self) -> int:
-        if self._legacy is not None:
-            raise ConfigError("revision is unavailable for the legacy domain API", code="legacy_api")
-        return self._impl.revision
-
-    @property
-    def rendered_revision(self) -> int | None:
-        if self._legacy is not None:
-            raise ConfigError("rendered_revision is unavailable for the legacy domain API", code="legacy_api")
-        return self._impl.rendered_revision
-
-    @property
-    def dirty(self) -> bool:
-        if self._legacy is not None:
-            return self._legacy._fig is None
-        return self._impl.dirty
-
-    @property
-    def closed(self) -> bool:
-        if self._legacy is not None:
-            return False
-        return self._impl.closed
-
-    @property
-    def effective_config(self):
-        if self._legacy is not None:
-            raise ConfigError("effective_config is unavailable for the legacy domain API", code="legacy_api")
-        return self._impl.effective_config
 
 
 __all__ = ["Chart", "LayerResult", "MapSubplot", "Panel", "PlotLayer", "Subplot"]

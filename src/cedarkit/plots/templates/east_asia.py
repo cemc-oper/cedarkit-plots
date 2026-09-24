@@ -13,13 +13,13 @@ from cedarkit.plots.config import (
     GridlineSpec,
     LayoutSpec,
     MapFeatureSpec,
+    MapInfo,
     Rect,
     SubplotSpec,
     Theme,
 )
 from cedarkit.plots.errors import ConfigError
 from cedarkit.plots.map import MapType
-from cedarkit.plots.painter.map_painter import MapInfo
 
 from cedarkit.plots.domains.east_asia_config import (
     EAST_ASIA_DOMAIN,

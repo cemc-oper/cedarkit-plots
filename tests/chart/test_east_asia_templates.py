@@ -17,6 +17,7 @@ from cedarkit.plots.config import (
     DecorationSpec,
     GridlineSpec,
     LayoutSpec,
+    MapInfo,
     MapFeatureSpec,
     Rect,
     SubplotSpec,
@@ -28,7 +29,6 @@ from cedarkit.plots.domains import (
 )
 from cedarkit.plots.errors import ConfigError
 from cedarkit.plots.map import MapLoader, MapType
-from cedarkit.plots.painter.map_painter import MapInfo
 from cedarkit.plots.style import ContourStyle
 from cedarkit.plots.templates import east_asia, east_asia_chart
 

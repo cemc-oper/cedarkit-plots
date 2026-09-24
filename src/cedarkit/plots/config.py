@@ -534,6 +534,15 @@ class MapFeatureSpec:
             _check_bool(self.enabled, "enabled")
 
 
+@dataclass(frozen=True, slots=True)
+class MapInfo:
+    """Small value object for the map review annotation."""
+
+    text: str
+    x: float
+    y: float
+
+
 @dataclass(frozen=True, kw_only=True, slots=True)
 class BasemapSpec:
     loader: Any = field(default=UNSET)
@@ -1679,7 +1688,7 @@ parse_config = resolve_config
 __all__ = [
     "AnnotationSpec", "AxisSpec", "BasemapSpec", "BorderSpec", "Cell",
     "ChartRule", "ChartSelector", "ChartSpec", "ColorbarSpec", "DecorationSpec",
-    "EffectiveConfig", "GridlineSpec", "LayoutSpec", "MapFeatureSpec", "Rect",
+    "EffectiveConfig", "GridlineSpec", "LayoutSpec", "MapFeatureSpec", "MapInfo", "Rect",
     "RESET", "SlotSpec", "SubplotSpec", "TextPosition", "Theme",
     "TimeStepFormatter", "TitleSpec", "UNSET", "merge_config", "parse_config",
     "resolve_axis", "resolve_basemap", "resolve_chart_spec", "resolve_config",

@@ -13,6 +13,7 @@ from cedarkit.plots import MapSubplot, Panel
 from cedarkit.plots.config import (
     BasemapSpec,
     LayoutSpec,
+    MapInfo,
     MapFeatureSpec,
     Rect,
     SubplotSpec,
@@ -20,7 +21,6 @@ from cedarkit.plots.config import (
 from cedarkit.plots.domains import Domain
 from cedarkit.plots.errors import ContentError
 from cedarkit.plots.map import MapLoader, MapType
-from cedarkit.plots.painter.map_painter import MapInfo
 from cedarkit.plots.style import BarbStyle, ContourStyle
 
 

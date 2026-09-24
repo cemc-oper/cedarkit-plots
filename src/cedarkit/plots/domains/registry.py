@@ -58,7 +58,7 @@ class DomainRegistry:
 
     @classmethod
     def builtins(cls) -> "DomainRegistry":
-        """Return only the new configuration presets; no legacy MapTemplate."""
+        """Return the built-in value-based presentation presets."""
         from .. import templates
 
         registry = cls()

@@ -1,4 +1,4 @@
-"""Built-in operation descriptors (without legacy style-driven conversion)."""
+"""Built-in operation descriptors for workflow recipes."""
 
 from __future__ import annotations
 
