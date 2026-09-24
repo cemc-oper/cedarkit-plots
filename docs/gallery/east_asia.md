@@ -11,141 +11,60 @@ kernelspec:
   name: python3
 ---
 
-# 东亚（`EastAsiaMapTemplate`）
+# 东亚：主图与南海附图
+
+EastAsia 展示预设为一个已创建的 Chart 提供主地图及可选南海附图。温度层可以
+指向全部子图，风羽层只绘制到主图。以下固定合成场在文档构建时执行，图像直接
+显示在页面中，不写入仓库文件。
 
 ```{code-cell} python
-import pandas as pd
+%matplotlib inline
+import matplotlib as mpl
+import numpy as np
+import cartopy.crs as ccrs
+from IPython.display import display
+from cedarkit.plots import Panel
+from cedarkit.plots.templates import east_asia
+from cedarkit.plots.testing import east_asia_temperature_field, east_asia_wind_fields
 
-from cedarkit.plots.chart import Panel
-from cedarkit.plots.domains import EastAsiaMapTemplate
-from cedarkit.plots.testing import (
-    east_asia_temperature_field,
-    east_asia_pressure_field,
-    east_asia_wind_fields,
-    east_asia_precipitation_field,
-    temperature_style,
-    precipitation_style,
-    pressure_contour_style,
-    wind_barb_style,
-    wind_barb_style_black,
+mpl.rcParams["font.family"] = "DejaVu Sans"
+
+temperature = east_asia_temperature_field(
+    coords=(np.arange(70, 141, 1), np.arange(0, 61, 1)),
+).assign_attrs(
+    temperature_kind="absolute",
+    standard_name="air_temperature",
+    cemc_name="t2m",
 )
-
-start_time = pd.Timestamp("2024-11-09 00:00:00")
-forecast_time = pd.Timedelta("24h")
-
-t_style = temperature_style()
-rain_style = precipitation_style()
-p_style = pressure_contour_style()
-barb_style_blue = wind_barb_style()
-barb_style_black = wind_barb_style_black()
-
-t = east_asia_temperature_field()
-p = east_asia_pressure_field()
 u, v = east_asia_wind_fields()
-rain = east_asia_precipitation_field()
+
+with Panel(template=east_asia(with_inset=True)) as panel:
+    chart = panel.add_chart(id="weather")
+    layer = chart.contourf(
+        temperature,
+        style="cemc.t2m:cn_summer",
+        data_crs=ccrs.PlateCarree(),
+        subplots="all",
+    )
+    chart.barbs(
+        u,
+        v,
+        style="cemc.wind:cn",
+        data_crs=ccrs.PlateCarree(),
+        vector_basis="earth",
+        subplots="main",
+    )
+    chart.set_title("2 m temperature and 10 m wind")
+    chart.colorbar(layer, label="°C")
+    display(panel.render())
+
+    stable_chart = panel.charts["weather"]
+    stable_layer = stable_chart.layers[layer.id]
+    panel.apply_template(east_asia(with_inset=False))
+    display(panel.render())
+    assert panel.charts["weather"] is stable_chart
+    assert stable_chart.layers[layer.id] is stable_layer
 ```
 
-## 温度填充
-
-```{code-cell} python
-panel = Panel(domain=EastAsiaMapTemplate())
-panel.plot(t, style=t_style)
-panel.set_title(
-    graph_name="2m Temperature (°C)",
-    system_name="cedarkit-plots demo",
-    start_time=start_time,
-    forecast_time=forecast_time,
-)
-panel.add_colorbar(style=t_style)
-panel.show()
-```
-
-## 24 小时降水填充
-
-```{code-cell} python
-panel = Panel(domain=EastAsiaMapTemplate())
-panel.plot(rain, style=rain_style)
-panel.set_title(
-    graph_name="24h Precipitation (mm)",
-    system_name="cedarkit-plots demo",
-    start_time=start_time,
-    forecast_time=forecast_time,
-)
-panel.add_colorbar(style=rain_style)
-panel.show()
-```
-
-## 海平面气压等值线
-
-```{code-cell} python
-panel = Panel(domain=EastAsiaMapTemplate())
-panel.plot(p, style=p_style)
-panel.set_title(
-    graph_name="MSLP (hPa)",
-    system_name="cedarkit-plots demo",
-    start_time=start_time,
-    forecast_time=forecast_time,
-)
-panel.show()
-```
-
-## 10 米风场风羽
-
-```{code-cell} python
-panel = Panel(domain=EastAsiaMapTemplate())
-panel.plot([[u, v]], style=barb_style_blue, layer=[0])
-panel.set_title(
-    graph_name="10m Wind (m/s)",
-    system_name="cedarkit-plots demo",
-    start_time=start_time,
-    forecast_time=forecast_time,
-)
-panel.show()
-```
-
-## 温度填充 + 风羽叠加
-
-```{code-cell} python
-panel = Panel(domain=EastAsiaMapTemplate())
-panel.plot(t, style=t_style)
-panel.plot([[u, v]], style=barb_style_black, layer=[0])
-panel.set_title(
-    graph_name="2m Temperature (°C) & 10m Wind",
-    system_name="cedarkit-plots demo",
-    start_time=start_time,
-    forecast_time=forecast_time,
-)
-panel.add_colorbar(style=t_style)
-panel.show()
-```
-
-## 温度填充 + 海平面气压等值线
-
-```{code-cell} python
-panel = Panel(domain=EastAsiaMapTemplate())
-panel.plot(t, style=t_style)
-panel.plot(p, style=p_style)
-panel.set_title(
-    graph_name="MSLP (hPa) & 2m Temperature (°C)",
-    system_name="cedarkit-plots demo",
-    start_time=start_time,
-    forecast_time=forecast_time,
-)
-panel.add_colorbar(style=t_style)
-panel.show()
-```
-
-## 关闭右下角副图
-
-```{code-cell} python
-panel = Panel(domain=EastAsiaMapTemplate(with_sub_area=False))
-panel.plot(t, style=t_style)
-panel.set_title(
-    graph_name="2m Temperature (°C, 不带副图)",
-    system_name="cedarkit-plots demo",
-    start_time=start_time,
-    forecast_time=forecast_time,
-)
-panel.add_colorbar(style=t_style)
-panel.show()
-```
+模板只提供展示配置；数据、Chart 和图层由调用方建立。第二次渲染关闭附图，验证
+模板切换后内容句柄仍保持稳定。

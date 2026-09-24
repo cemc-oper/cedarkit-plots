@@ -5,61 +5,25 @@ mystnb:
 
 # cedarkit-plots
 
-`cedarkit-plots` 是构建在 Matplotlib + Cartopy 之上的低层
-气象绘图库，提供面板（`Panel`）、子图（`Chart`）、地图模板
-（`MapTemplate`）、绘图样式（`ContourStyle`、`BarbStyle` …）以及
-原生离散色表、CEMC 样式与 shapefile 资源。它是 `cedar-graph` 等高层应用包
-背后的"画图引擎"。
+`cedarkit-plots` 是面向气象场的底层绘图库。核心 API 将稳定的逻辑内容
+（`Panel`、`Chart`、`PlotLayer`）与每次绘制产生的 Matplotlib 对象
+（`Subplot` 和 artists）分开。`PanelTemplate` 与 `ChartTemplate` 是可选的展示
+配置预设；不使用模板也能直接配置和绘图。
 
-```{admonition} 文档约定
-:class: tip
+本文档示例使用固定的合成数据与 Agg 后端，不读取业务数据。内容包括内置
+CEMC/通用样式、风羽、集合 facet、原生色表、地图资源和 v3 workflow recipe。
 
-本文档中的所有图都在构建时由
-{mod}`cedarkit.plots.testing` 中的合成数据函数生成，
-无需访问任何业务数据。这套合成数据同时被集成测试套件复用，
-确保文档示例与 CI 中跑过的代码一致——详见 {doc}`tutorials/synthetic_data`。
-```
+## 从这里开始
 
-## 内容导览
-
-::::{grid} 1 1 2 2
-:gutter: 3
-
-:::{grid-item-card} 快速上手
-:link: getting_started/quick_start
-:link-type: doc
-
-构造一个面板、添加一层填充图、打印保存。
-:::
-
-:::{grid-item-card} 核心概念
-:link: getting_started/concepts
-:link-type: doc
-
-`Panel` / `Chart` / `Layer` / `Style` / `MapTemplate` 之间的关系。
-:::
-
-:::{grid-item-card} 绘图样例
-:link: gallery/index
-:link-type: doc
-
-按地图模板（东亚、欧亚、全球、北极、集合预报）逐个展示绘图组合。
-:::
-
-:::{grid-item-card} API 参考
-:link: api/index
-:link-type: doc
-
-`cedarkit.plots` 各子模块的自动生成参考。
-:::
-
-::::
-
-## 安装
-
-```bash
-pip install cedarkit-plots
-```
+- {doc}`getting_started/install`：安装包及 workflow、文档可选依赖。
+- {doc}`getting_started/quick_start`：显式准备单位并绘制 CEMC 温度图。
+- {doc}`getting_started/concepts`：理解内容句柄、展示配置和渲染生命周期。
+- {doc}`tutorials/templates`：直接配置 XY/地图图表、主图/附图和模板切换。
+- {doc}`tutorials/quickplot`：使用单场、向量和 facet 快绘入口。
+- {doc}`tutorials/styles` 与 {doc}`tutorials/colormap`：选择 CEMC/通用样式和原生色表。
+- {doc}`tutorials/recipe_v3`：校验并预览声明式 v3 workflow recipe。
+- {doc}`gallery/index`：可运行的产品与展示样例。
+- {doc}`api/index`：公开 Python 接口。
 
 ```{toctree}
 :hidden:
@@ -75,18 +39,18 @@ getting_started/concepts
 :caption: 教程
 
 tutorials/synthetic_data
+tutorials/templates
 tutorials/quickplot
 tutorials/styles
 tutorials/style_library
 tutorials/colormap
 tutorials/units
-tutorials/templates
 tutorials/recipe_v3
 ```
 
 ```{toctree}
 :hidden:
-:caption: 绘图样例
+:caption: 图集
 
 gallery/index
 ```

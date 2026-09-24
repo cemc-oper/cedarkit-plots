@@ -12,7 +12,7 @@ mystnb:
    :show-inheritance:
 ```
 
-## Core content and rendering types
+## 内容与渲染类型
 
 ```{eval-rst}
 .. automodule:: cedarkit.plots.chart.core

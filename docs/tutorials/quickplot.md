@@ -20,9 +20,14 @@ Panel、Chart/PlotLayer 句柄和单位转换记录，支持继续更新图层�
 ## 单图：明确准备单位，然后匹配样式
 
 ```{code-cell} python
+%matplotlib inline
+import matplotlib as mpl
 import numpy as np
 import xarray as xr
+from IPython.display import display
 from cedarkit.plots import quickplot
+
+mpl.rcParams["font.family"] = "DejaVu Sans"
 
 x, y = np.meshgrid(np.linspace(-1, 1, 20), np.linspace(-1, 1, 16))
 kelvin = xr.DataArray(
@@ -31,12 +36,14 @@ kelvin = xr.DataArray(
            "cemc_name": "t2m", "standard_name": "air_temperature"},
 )
 with quickplot.plot(kelvin, units="degC", title="2m temperature",
-                    colorbar_label="degC", output="quick-temperature.png") as result:
+                    colorbar_label="degC") as result:
     print(result.conversions[0][0])
     assert result.layer.method == "contourf"
+    display(result.panel.fig)
     # 更换样式不会再次进行 K→degC 转换。
     result.layer.update(style="cemc.t2m:cn_winter")
-    result.panel.save("quick-temperature-winter.png")
+    result.panel.render()
+    display(result.panel.fig)
 assert kelvin.attrs["units"] == "K"
 ```
 
@@ -58,8 +65,9 @@ u = kelvin.copy(data=36 + 20*y).assign_attrs(
     units="km/h", cemc_name="u", temperature_kind=None, standard_name="eastward_wind")
 v = kelvin.copy(data=3 + 4*x).assign_attrs(
     units="m/s", cemc_name="v", temperature_kind=None, standard_name="northward_wind")
-with quickplot.barbs(u, v, units="m/s", title="Wind", output="quick-wind.png") as result:
+with quickplot.barbs(u, v, units="m/s", title="Wind") as result:
     assert len(result.conversions[0]) == 2
+    display(result.panel.fig)
 ```
 
 两分量独立校验与转换，必须二维、维度/坐标/形状相符。不从 tuple 或 Dataset
@@ -78,12 +86,13 @@ with quickplot.facet(
     roles=["control", "member", "member"], units="degC",
     level_policy="shared", colorbar_label="degC",
     layout=LayoutSpec(rows=1, columns=3, figsize=(12, 4)),
-    output="quick-facet.png",
 ) as result:
     assert tuple(result.panel.charts) == ("ctl", "mem01", "mem07")
+    display(result.panel.fig)
     original = result.charts
     result.panel.configure(layout=LayoutSpec(rows=3, columns=1))
     result.panel.render()
+    display(result.panel.fig)
     assert tuple(result.panel.charts.values()) == original
 ```
 
@@ -97,6 +106,7 @@ roles 默认全部 member，包括坐标 0，不自动创建 CTL/MAX 或计算�
 items = (quickplot.FacetItem(f"member-{n}", kelvin+n) for n in (1, 2, 7))
 with quickplot.facet(items, units="degC", colorbar=False) as result:
     assert len(result.charts) == 3
+    display(result.panel.fig)
 ```
 
 每个 iterable 恰好消费一次，空输入/重复 ID/坏成员/消费异常明确报错，
@@ -118,9 +128,9 @@ colorbar_id（默认 colorbar），逐图色标为 `<colorbar_id>_<member_id>`�
 使用带色标配置的模板时，可传对应 ID，如 ens_cn 的 `ens_cn_colorbar`。
 颜色与阈值来自图层 mappable，不另建绘图路径。
 
-output=None 只 render；给路径则由 Panel.save 输出，调用者负责目录存在。
+quickplot 调用不传 output 时只 render；给路径则由 Panel.save 输出，调用者负责目录存在。
 save_kwargs 可指定 dpi/format/bbox_inches/transparent，必须与 output 一起传。
-工厂不自动 show，不在成功保存后关闭结果；可用 result.panel.show() 主动显示。
+工厂不自动打开交互窗口，也不在成功后关闭结果；本教程使用 Notebook display 展示图像。
 异常会清理本次创建的 Panel/Figure，再抛出原有核心错误。
 
 QuickPlotResult.charts/layers/conversions 均按输入顺序保存，单成员可用 .chart/.layer。

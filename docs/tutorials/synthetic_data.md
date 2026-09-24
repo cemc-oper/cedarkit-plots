@@ -28,6 +28,7 @@ GRIB2 数据，但在文档与单元测试里我们希望任何环境都能直�
 还有降水。下面把东亚区域的几个字段画出来，看看合成数据长什么样。
 
 ```{code-cell} python
+%matplotlib inline
 import matplotlib.pyplot as plt
 
 from cedarkit.plots.testing import (

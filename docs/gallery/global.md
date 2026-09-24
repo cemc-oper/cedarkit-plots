@@ -1,115 +1,27 @@
 ---
-jupytext:
-  text_representation:
-    extension: .md
-    format_name: myst
-    format_version: 0.13
-    jupytext_version: 1.16.4
-kernelspec:
-  display_name: Python 3
-  language: python
-  name: python3
+mystnb:
+  execution_mode: 'off'
 ---
 
-# 全球（`GlobalMapTemplate`）
+# 全球地图
 
-```{code-cell} python
-import pandas as pd
+全球预设可直接用于单 Chart，也可以拆分为 `global_chart()` 后装入自定义 Panel。
+示例中的经纬度场由项目合成数据工具生成。
 
-from cedarkit.plots.chart import Panel
-from cedarkit.plots.domains import GlobalMapTemplate
-from cedarkit.plots.testing import (
-    global_temperature_field,
-    global_pressure_field,
-    global_wind_fields,
-    temperature_style,
-    pressure_contour_style,
-    wind_barb_style,
-    wind_barb_style_black,
-)
+```python
+import cartopy.crs as ccrs
+from cedarkit.plots import Panel
+from cedarkit.plots.templates import global_map
+from cedarkit.plots.testing import global_temperature_field, temperature_style
 
-start_time = pd.Timestamp("2024-11-09 00:00:00")
-forecast_time = pd.Timedelta("24h")
-
-t_style = temperature_style()
-p_style = pressure_contour_style()
-
-t = global_temperature_field()
-p = global_pressure_field()
-u, v = global_wind_fields()
+field = global_temperature_field()
+with Panel(template=global_map()) as panel:
+    chart = panel.add_chart(id="temperature")
+    layer = chart.contourf(field, style=temperature_style(),
+                           data_crs=ccrs.PlateCarree(), subplots="all")
+    chart.set_title("Global synthetic temperature")
+    chart.colorbar(layer, label="°C")
+    panel.save("global-temperature.png")
 ```
 
-## 温度填充
-
-```{code-cell} python
-panel = Panel(domain=GlobalMapTemplate())
-panel.plot(t, style=t_style)
-panel.set_title(
-    graph_name="2m Temperature (°C)",
-    system_name="cedarkit-plots demo",
-    start_time=start_time,
-    forecast_time=forecast_time,
-)
-panel.add_colorbar(style=t_style)
-panel.show()
-```
-
-## 海平面气压等值线
-
-```{code-cell} python
-panel = Panel(domain=GlobalMapTemplate())
-panel.plot(p, style=p_style)
-panel.set_title(
-    graph_name="MSLP (hPa)",
-    system_name="cedarkit-plots demo",
-    start_time=start_time,
-    forecast_time=forecast_time,
-)
-panel.show()
-```
-
-## 10 米风场风羽
-
-```{code-cell} python
-panel = Panel(domain=GlobalMapTemplate())
-panel.plot([[u, v]], style=wind_barb_style())
-panel.set_title(
-    graph_name="10m Wind (m/s)",
-    system_name="cedarkit-plots demo",
-    start_time=start_time,
-    forecast_time=forecast_time,
-)
-panel.show()
-```
-
-## 温度 + 海平面气压组合
-
-```{code-cell} python
-panel = Panel(domain=GlobalMapTemplate())
-panel.plot(t, style=t_style)
-panel.plot(p, style=p_style)
-panel.set_title(
-    graph_name="MSLP (hPa) & 2m Temperature (°C)",
-    system_name="cedarkit-plots demo",
-    start_time=start_time,
-    forecast_time=forecast_time,
-)
-panel.add_colorbar(style=t_style)
-panel.show()
-```
-
-## 温度 + 风羽组合
-
-```{code-cell} python
-panel = Panel(domain=GlobalMapTemplate())
-panel.plot(t, style=t_style)
-panel.plot([[u, v]], style=wind_barb_style_black())
-panel.set_title(
-    graph_name="2m Temperature (°C) & 10m Wind",
-    system_name="cedarkit-plots demo",
-    start_time=start_time,
-    forecast_time=forecast_time,
-)
-panel.add_colorbar(style=t_style)
-panel.show()
-```
+数据坐标系通过 `data_crs` 明确传入，与地图显示投影和区域范围配置相互独立。

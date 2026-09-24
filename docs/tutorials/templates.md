@@ -1,150 +1,141 @@
 ---
-jupytext:
-  text_representation:
-    extension: .md
-    format_name: myst
-    format_version: 0.13
-    jupytext_version: 1.16.4
-kernelspec:
-  display_name: Python 3
-  language: python
-  name: python3
+mystnb:
+  execution_mode: 'off'
 ---
 
-# 地图模板（MapTemplate）
+# 直接配置、地图子图与展示预设
 
-`cedarkit.plots.domains` 内置了几种常用区域的预设模板，
-封装了投影、范围、标题与色标位置等布局信息。本节列出每种模板的
-最简使用方式，更完整的样例请见
-{doc}`../gallery/index`。
+`PanelTemplate` 和 `ChartTemplate` 是值对象形式的可选预设。它们为现有内容
+提供布局和子图配置，不创建 Chart 或图层。每个 Chart 都可以直接通过配置值
+建立；两个入口使用同一解析和渲染路径。
 
-```{code-cell} python
-import pandas as pd
+## 不使用模板的 XY 图
 
-start_time = pd.Timestamp("2024-11-09 00:00:00")
-forecast_time = pd.Timedelta("24h")
+下面的确定性示例可由仓库脚本完整运行：
+[`render_plot_examples.py`](../examples/render_plot_examples.py)。
+
+```python
+from cedarkit.plots import Panel
+from cedarkit.plots.testing import east_asia_temperature_field
+
+field = east_asia_temperature_field().assign_attrs(temperature_kind="absolute")
+panel = Panel()
+chart = panel.add_chart(id="temperature")
+layer = chart.contourf(field, style="cemc.t2m:cn_summer")
+chart.set_title("2 m temperature (°C)")
+chart.colorbar(layer, label="°C")
+try:
+    panel.save("temperature-xy.png")
+finally:
+    panel.close()
 ```
 
-## 东亚
+更多网格、槽位和配置字段见 {doc}`../api/chart`。
 
-```{code-cell} python
-from cedarkit.plots.chart import Panel
-from cedarkit.plots.domains import EastAsiaMapTemplate
-from cedarkit.plots.testing import (
-    east_asia_temperature_field,
-    temperature_style,
-)
+## 地图主图、南海附图与目标选择
 
-style = temperature_style()
-panel = Panel(domain=EastAsiaMapTemplate())
-panel.plot(east_asia_temperature_field(), style=style)
-panel.set_title(
-    graph_name="2m Temperature (°C)",
-    system_name="cedarkit-plots demo",
-    start_time=start_time,
-    forecast_time=forecast_time,
+```python
+import cartopy.crs as ccrs
+import numpy as np
+
+from cedarkit.plots import Panel
+from cedarkit.plots.templates import east_asia
+from cedarkit.plots.testing import east_asia_temperature_field, east_asia_wind_fields
+
+temperature = east_asia_temperature_field(
+    coords=(np.arange(70, 141, 1), np.arange(0, 61, 1)),
+).assign_attrs(temperature_kind="absolute")
+u, v = east_asia_wind_fields()
+panel = Panel(template=east_asia(with_inset=True))
+chart = panel.add_chart(id="weather")
+temperature_layer = chart.contourf(
+    temperature,
+    style="cemc.t2m:cn_summer",
+    subplots="all",
+    data_crs=ccrs.PlateCarree(),
 )
-panel.add_colorbar(style=style)
-panel.show()
+chart.barbs(
+    u, v,
+    style="cemc.wind:cn",
+    subplots="main",
+    data_crs=ccrs.PlateCarree(),
+    vector_basis="earth",
+)
+chart.set_title("CEMC 2 m temperature and 10 m wind")
+chart.colorbar(temperature_layer, label="°C")
+try:
+    panel.save("east-asia-main-inset.png")
+finally:
+    panel.close()
 ```
 
-`EastAsiaMapTemplate` 自带一个右下角的中国南海副图，可以通过
-`with_sub_area=False` 关闭：
+`subplots="all"` 会将温度层绘制到当前模板声明的主图和附图；字段范围必须覆盖
+这两个区域。风羽层只指向 `main`。也可以传一个或多个固定子图 ID。地图数据必须给出 `data_crs`；向量
+分量必须分别传入，且坐标和单位相容。
 
-```{code-cell} python
-panel = Panel(domain=EastAsiaMapTemplate(with_sub_area=False))
-panel.plot(east_asia_temperature_field(), style=style)
-panel.set_title(
-    graph_name="2m Temperature (°C, 不带副图)",
-    system_name="cedarkit-plots demo",
-    start_time=start_time,
-    forecast_time=forecast_time,
+## 配置对象与模板切换
+
+XY 图不依赖地图模板。定制布局可直接传入 `LayoutSpec`，或在建图后通过
+`Panel.configure()` 更新展示配置。地图区域预设包括 `east_asia()`、
+`cn_area()`、`europe_asia()`、`global_map()`、`global_area()` 和
+`north_polar()`；对应的 `*_chart()` 工厂只返回一个 Chart 的展示配置。
+
+```python
+from cedarkit.plots import Panel
+from cedarkit.plots.config import LayoutSpec
+from cedarkit.plots.templates import xy
+from cedarkit.plots.testing import east_asia_temperature_field
+
+field = east_asia_temperature_field().assign_attrs(
+    temperature_kind="absolute",
+    standard_name="air_temperature",
+    cemc_name="t2m",
 )
-panel.add_colorbar(style=style)
-panel.show()
+panel = Panel(template=xy())
+chart = panel.add_chart(id="temperature")
+layer = chart.contourf(field, style="cemc.t2m:cn_summer")
+chart.colorbar(layer, label="°C")
+panel.render()
+
+panel.configure(layout=LayoutSpec(rows=1, columns=1, figsize=(10, 6)))
+panel.apply_template(xy())
+panel.render()
+assert panel.charts["temperature"] is chart
+assert chart.layers["plot_1"] is layer
+panel.close()
 ```
 
-## 中国子区域 (`CnAreaMapTemplate`)
+模板切换在校验成功后整体提交。若新模板遗漏固定目标、容量不足或目标类型与
+图层方法不匹配，会报告配置错误并保留此前有效配置。模板不执行 provider、单位
+转换或诊断计算；数据层只在数据准备阶段运行一次。
 
-需要画到具体的省/区时，使用 `CnAreaMapTemplate` 并传一个
-`AreaRange`：
+集合布局使用 {func}`~cedarkit.plots.templates.ens_cn` 声明现有成员的排列规则。
+成员 Chart、control 和 MAX 由调用方的数据流程创建；模板不会假造缺失成员或
+计算统计量。完整 facet 入口与共享色阶语义见 {doc}`quickplot`。
 
-```{code-cell} python
-from cedarkit.plots.domains import CnAreaMapTemplate
-from cedarkit.plots.types import AreaRange
+## 重绘与资源生命周期
 
-panel = Panel(
-    domain=CnAreaMapTemplate(area=AreaRange.from_tuple((108, 137, 37, 55))),
-)
-panel.plot(east_asia_temperature_field(), style=style)
-panel.set_title(
-    graph_name="NorthEast 2m Temperature (°C)",
-    system_name="cedarkit-plots demo",
-    start_time=start_time,
-    forecast_time=forecast_time,
-)
-panel.add_colorbar(style=style)
-panel.show()
+`render()` 在内容或配置改变后整图重绘。成功重绘后，`Chart` 与 `PlotLayer`
+句柄保持稳定，`Subplot` 和 artists 则属于本次渲染代次，旧引用不应继续使用。
+重复 `save()` 会复用干净渲染；配置更新后的 `save()` 会绘制当前状态。
+
+推荐使用上下文管理器或显式 `close()` 释放 Panel 拥有的 Figure 和绘图结果：
+
+```python
+with Panel() as panel:
+    chart = panel.add_chart(id="temperature")
+    chart.contourf(field, style="cemc.t2m:cn_summer")
+    panel.save("temperature.png")
 ```
 
-## 全球
+关闭 Panel 不会关闭调用方拥有的 xarray 数据源。renderer 不会重新读取数据，
+也不会回放 Matplotlib 底层对象上的临时修改；持久化展示定制应写入配置。
 
-```{code-cell} python
-from cedarkit.plots.domains import GlobalMapTemplate
-from cedarkit.plots.testing import global_temperature_field
+文档构建时会动态运行 Notebook 单元格，生成的图像作为站点构建产物输出。固定字体、合成场和运行依赖由上述
+辅助导出脚本集中定义；默认输出到仓库外的临时目录。使用仓库锁文件运行：
 
-panel = Panel(domain=GlobalMapTemplate())
-panel.plot(global_temperature_field(), style=style)
-panel.set_title(
-    graph_name="Global 2m Temperature (°C)",
-    system_name="cedarkit-plots demo",
-    start_time=start_time,
-    forecast_time=forecast_time,
-)
-panel.add_colorbar(style=style)
-panel.show()
-```
-
-## 北极
-
-```{code-cell} python
-from cedarkit.plots.domains import NorthPolarMapTemplate
-from cedarkit.plots.testing import north_polar_temperature_field
-
-panel = Panel(domain=NorthPolarMapTemplate())
-panel.plot(north_polar_temperature_field(), style=style)
-panel.set_title(
-    graph_name="Polar 2m Temperature (°C)",
-    system_name="cedarkit-plots demo",
-    start_time=start_time,
-    forecast_time=forecast_time,
-)
-panel.add_colorbar(style=style)
-panel.show()
-```
-
-## 集合预报中国区域 (`EnsCNMapTemplate`)
-
-`EnsCNMapTemplate` 一次创建 15 个 chart（CTL + 14 个扰动成员），
-对应输入也是一个长度 15 的 `DataArray` 列表；
-开启 `enable_max=True` 后会变成 16 个 chart（再加 MAX）。
-
-```{code-cell} python
-from cedarkit.plots.domains import EnsCNMapTemplate
-from cedarkit.plots.testing import ens_cn_temperature_fields
-
-fields = ens_cn_temperature_fields()
-
-domain = EnsCNMapTemplate()
-panel = Panel(domain=domain)
-panel.plot(fields, style=style)
-domain.set_title(
-    panel=panel,
-    graph_name="2m Temperature (°C)",
-    system_name="EPS demo",
-    start_time=start_time,
-    forecast_time=forecast_time,
-)
-domain.add_colorbar(panel=panel, style=style)
-panel.show()
+```bash
+uv sync --extra test
+MPLBACKEND=Agg MPLCONFIGDIR=/tmp/cedarkit-plots-docs-mpl \
+  uv run python docs/examples/render_plot_examples.py /tmp/cedarkit-plots-docs
 ```

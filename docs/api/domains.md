@@ -12,7 +12,7 @@ mystnb:
    :show-inheritance:
 ```
 
-## Geographic domains
+## 地理区域配置
 
 ```{eval-rst}
 .. automodule:: cedarkit.plots.domains.domain
@@ -21,7 +21,7 @@ mystnb:
    :show-inheritance:
 ```
 
-## Presentation presets
+## 展示预设
 
 ```{eval-rst}
 .. automodule:: cedarkit.plots.templates

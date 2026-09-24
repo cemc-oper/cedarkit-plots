@@ -42,6 +42,7 @@ catalog 包含 51 个表；来源版本、逐文件 SHA256、MeteoSwiss/Gist 原
 ## 可执行色表预览
 
 ```{code-cell} python
+%matplotlib inline
 import matplotlib.pyplot as plt
 import numpy as np
 from cedarkit.plots.palette import get_palette

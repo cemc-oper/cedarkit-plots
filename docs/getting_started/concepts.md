@@ -5,62 +5,42 @@ mystnb:
 
 # 核心概念
 
-`cedarkit-plots` 把"画一张气象图"这件事拆成了若干个互相协作
-的小组件。理解它们之间的关系，对阅读 `cedar-graph` 等上层包
-也很有帮助。
+绘图 API 将图形的逻辑内容与每次绘制所创建的对象分开管理。
 
-## Panel / Chart / Layer
+## 内容句柄
 
-```
-┌───────────────────────── Panel ──────────────────────────┐
-│  ┌──────── Chart ────────┐  ┌──────── Chart ────────┐    │
-│  │  Layer 0：地图底图    │  │  Layer 0：地图底图    │ …  │
-│  │  Layer 1：等值线      │  │  Layer 1：填充        │    │
-│  │  Layer 2：风羽        │  │  Layer 2：等值线      │    │
-│  └────────────────────── ┘  └─────────────────────── ┘    │
-└──────────────────────────────────────────────────────────┘
-```
+- `Panel` 管理逻辑 Chart、展示配置以及最近一次成功渲染创建的
+  Matplotlib `Figure`。
+- `Chart` 是布局中的稳定逻辑图表，持有一个或多个 `PlotLayer`，并可将图层
+  定向到多个命名子图。
+- `PlotLayer` 保存稳定 ID、数据引用、显式绘图方法（`contourf`、`contour` 或
+  `barbs`）、样式快照及目标子图。
+- `Subplot` 和 Matplotlib artists 是一次渲染的结果。布局或模板改变后这些
+  结果可以替换；`Chart` 与 `PlotLayer` 句柄保持稳定。
 
-- {class}`~cedarkit.plots.chart.Panel`：与 matplotlib `Figure` 一一对应，
-  对外暴露统一的绘图、加标题、加色标接口。
-- {class}`~cedarkit.plots.chart.Chart`：一个面板内的一张子图（地图框），
-  对应一个 matplotlib `Axes`。常规情况下面板里只有一个 chart，
-  但集合预报模板（`EnsCNMapTemplate`）会一次性放 15~16 个 chart。
-- {class}`~cedarkit.plots.chart.Layer`：在 chart 上的一层绘图——填充、
-  等值线、风羽……可以叠加多层。
+创建 Chart 或 PlotLayer 只登记逻辑内容。`Panel.render()`、`Panel.save()` 与
+`Panel.show()` 根据当前状态绘制。渲染器不会从样式推断绘图方法，也不会执行
+数据 provider 或 workflow 运算。
 
-## MapTemplate / 模板
+## 配置值
 
-`MapTemplate` 是"区域 + 投影 + 标题/色标布局"的一组预设。
-`cedarkit.plots.domains` 内置了几种常用模板：
+`LayoutSpec` 描述 Panel 网格与位置；`ChartSpec` 和 `SubplotSpec` 描述 XY/地图
+目标、区域、投影和底图；`Theme` 与 `DecorationSpec` 保存外观配置。调用方可以
+直接传入这些配置，也可以将其组合为可选的 `PanelTemplate` 或 `ChartTemplate`。
+模板只选择展示方式，不创建 Chart、图层或数据。
 
-| 模板 | 作用 |
-|------|------|
-| {class}`~cedarkit.plots.domains.EastAsiaMapTemplate` | 中国东亚区域，可叠加副图 |
-| {class}`~cedarkit.plots.domains.CnAreaMapTemplate`   | 中国子区域（按需指定 `area`） |
-| {class}`~cedarkit.plots.domains.EuropeAsiaMapTemplate`| 欧亚区域 |
-| {class}`~cedarkit.plots.domains.GlobalMapTemplate`    | 全球 |
-| {class}`~cedarkit.plots.domains.GlobalAreaMapTemplate`| 全球子区域 |
-| {class}`~cedarkit.plots.domains.NorthPolarMapTemplate`| 北极立体投影 |
-| {class}`~cedarkit.plots.domains.EnsCNMapTemplate`     | 集合预报中国区域（多 chart） |
+## 样式与数据准备
 
-当系统提供的模板不够用时，可以继承
-{class}`~cedarkit.plots.domains.MapTemplate` 自己实现一个新的。
+`ContourStyle` 与 `BarbStyle` 描述单个图层的外观，以及适用时的单位或累计时段
+约束。`StyleRegistry.default()` 已包含 CEMC 样式；`generic.t` 可显式选择。
+样式只检查准备后的数据，不负责数值转换。需要转换时，先调用
+`cedarkit.plots.units.prepare_field()` 或 `prepare_vector()`。
 
-## Style
+## 可选 workflow
 
-样式（{mod}`cedarkit.plots.style`）描述"这一层应该怎么画"：
+`cedarkit.plots[workflow]` 增加版本化的 `cedarkit.plots/v3` recipe、静态计划、
+provider、注册算子和渲染桥接。直接使用 Panel/Chart 不依赖 workflow recipe。
+cedar-graph 等上层产品使用 workflow 将数据请求与计算连接到底层绘图模型。
 
-- {class}`~cedarkit.plots.style.ContourStyle`：等值线/填充。
-  `fill=True` 走 `contourf`，`fill=False` 走 `contour`。
-- {class}`~cedarkit.plots.style.BarbStyle`：风羽，含色、长度、增量等参数。
-- {class}`~cedarkit.plots.style.ColorbarStyle`：色标的标签与位置。
-- {class}`~cedarkit.plots.style.ContourLabelStyle`：等值线标签字号、
-  填色背景等。
-
-## Colormap / Resources
-
-- `cedarkit.plots.palette.get_palette` 读取内置原生 JSON 离散色表。
-- `get_named_color` 返回经核实的 RGBA 命名色；transparent 的 alpha 为 0。
-- `StyleRegistry.default()` 加载完整 CEMC 样式，无需 cedar-graph。
-- 中国 shapefile 与原生色表打包在 `cedarkit/plots/resources/`，通过包资源读取。
+直接配置、地图主附图与模板切换见 {doc}`../tutorials/templates`；单场、向量和
+facet 快绘见 {doc}`../tutorials/quickplot`。

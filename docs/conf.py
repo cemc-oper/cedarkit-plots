@@ -90,7 +90,6 @@ intersphinx_mapping = {
     "pandas": ("https://pandas.pydata.org/docs/", None),
     "xarray": ("https://docs.xarray.dev/en/stable/", None),
     "matplotlib": ("https://matplotlib.org/stable/", None),
-    "cartopy": ("https://scitools.org.uk/cartopy/docs/latest/", None),
 }
 
 

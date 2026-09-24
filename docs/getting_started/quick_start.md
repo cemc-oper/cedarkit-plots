@@ -16,9 +16,14 @@ kernelspec:
 下面用内置 CEMC 样式绘制合成温度场。示例采用 XY 坐标，不需要下载地图资源。
 
 ```{code-cell} python
+%matplotlib inline
+import matplotlib as mpl
 import numpy as np
 import xarray as xr
+from IPython.display import display
 from cedarkit.plots import quickplot
+
+mpl.rcParams["font.family"] = "DejaVu Sans"
 
 x, y = np.meshgrid(np.linspace(-1, 1, 30), np.linspace(-1, 1, 24))
 temperature = xr.DataArray(
@@ -27,14 +32,14 @@ temperature = xr.DataArray(
            "cemc_name": "t2m", "standard_name": "air_temperature"},
 )
 with quickplot.plot(temperature, units="degC", title="2m temperature",
-                    colorbar_label="degC", output="temperature.png") as result:
+                    colorbar_label="degC") as result:
     print(result.conversions[0][0])
     # result.panel / result.chart / result.layer 是可继续配置和更新的句柄。
+    display(result.panel.fig)
 ```
 
 显式 units= 先校验并准备数据，再匹配样式。输入字段保持 K，不被修改。
-成功返回的 Panel 保持打开；with 退出时关闭。若不使用 with，请调用 result.close()。
-不传 output 时仍完成渲染，可通过 result.panel.show() 主动显示。
+成功返回的 Panel 保持打开；with 退出时关闭。示例通过 Notebook 输出直接显示图像，不写入静态图片文件。
 
 风羽用 `quickplot.barbs(u, v)`，成员图用 `quickplot.facet(data, dim="number")`。
 完整的单位、角色、共享色阶和模板用法见 [快绘教程](../tutorials/quickplot.md)。

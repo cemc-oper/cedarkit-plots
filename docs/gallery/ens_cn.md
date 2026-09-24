@@ -1,74 +1,35 @@
 ---
-jupytext:
-  text_representation:
-    extension: .md
-    format_name: myst
-    format_version: 0.13
-    jupytext_version: 1.16.4
-kernelspec:
-  display_name: Python 3
-  language: python
-  name: python3
+mystnb:
+  execution_mode: 'off'
 ---
 
-# 集合预报中国区域（`EnsCNMapTemplate`）
+# 集合成员布局
 
-`EnsCNMapTemplate` 是用于集合预报多成员展示的特殊模板，
-一次性创建 15 个 chart（CTL + 14 个扰动成员）。
-开启 `enable_max=True` 后再追加一个 MAX chart。
+`ens_cn()` 只排列调用方已经创建的 Chart。成员身份通过 Chart ID 和 role 传入；
+它不会生成成员、control 或 MAX。MAX 需要由产品数据流程按照明确的缺测和统计
+规则计算后，再作为普通 Chart 添加。
 
-```{code-cell} python
-import pandas as pd
+```python
+import cartopy.crs as ccrs
+from cedarkit.plots import Panel
+from cedarkit.plots.config import BasemapSpec
+from cedarkit.plots.map import MapLoader, MapType
+from cedarkit.plots.templates import ens_cn
+from cedarkit.plots.testing import ens_cn_temperature_fields, temperature_style
 
-from cedarkit.plots.chart import Panel
-from cedarkit.plots.domains import EnsCNMapTemplate
-from cedarkit.plots.testing import (
-    ens_cn_temperature_fields,
-    ens_cn_temperature_fields_with_max,
-    temperature_style,
-)
+class EmptyLoader(MapLoader):
+    def get_feature(self, name, **kwargs):
+        return []
 
-start_time = pd.Timestamp("2024-11-09 00:00:00")
-forecast_time = pd.Timedelta("24h")
-t_style = temperature_style()
+fields = ens_cn_temperature_fields(member_count=4)
+basemap = BasemapSpec(loader=EmptyLoader, map_type=MapType.Portrait, features=())
+with Panel(template=ens_cn(columns=3, require_control=False, colorbar_id=None,
+                           basemap=basemap)) as panel:
+    for index, field in enumerate(fields, start=1):
+        chart = panel.add_chart(id=f"mem{index:02d}", role="member")
+        chart.contourf(field, style=temperature_style(), data_crs=ccrs.PlateCarree())
+    panel.save("ensemble-members.png")
 ```
 
-## 15 个集合成员
-
-```{code-cell} python
-fields = ens_cn_temperature_fields()
-print(f"member count: {len(fields)}")
-
-domain = EnsCNMapTemplate()
-panel = Panel(domain=domain)
-panel.plot(fields, style=t_style)
-domain.set_title(
-    panel=panel,
-    graph_name="2m Temperature (°C)",
-    system_name="EPS demo",
-    start_time=start_time,
-    forecast_time=forecast_time,
-)
-domain.add_colorbar(panel=panel, style=t_style)
-panel.show()
-```
-
-## 15 个成员 + MAX
-
-```{code-cell} python
-fields_max = ens_cn_temperature_fields_with_max()
-print(f"member + MAX count: {len(fields_max)}")
-
-domain = EnsCNMapTemplate(enable_max=True)
-panel = Panel(domain=domain)
-panel.plot(fields_max, style=t_style)
-domain.set_title(
-    panel=panel,
-    graph_name="2m Temperature (°C)",
-    system_name="EPS demo",
-    start_time=start_time,
-    forecast_time=forecast_time,
-)
-domain.add_colorbar(panel=panel, style=t_style)
-panel.show()
-```
+该样例用空底图 loader 使渲染不依赖 Natural Earth 下载。实际业务中应由数据层
+根据返回成员列表创建对应 Chart，并单独决定是否存在 control 和 MAX。
