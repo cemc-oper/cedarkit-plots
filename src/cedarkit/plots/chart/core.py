@@ -729,6 +729,40 @@ class Panel:
         self._revision += 1
         return chart
 
+    def set_title(self, text: str | None, *, id: str = "title") -> None:
+        """Set or remove a title attached to the Panel figure."""
+        self._ensure_open()
+        self._set_title(None, text, id=id)
+
+    def colorbar(
+        self,
+        layers: PlotLayer | Sequence[PlotLayer],
+        *,
+        id: str | None = None,
+        subplots: str = "main",
+        label: str | None = None,
+    ) -> str:
+        """Register a figure-level colorbar for one or more Panel layers."""
+        self._ensure_open()
+        return self._register_colorbar(
+            None, layers, id=id, subplots=subplots, label=label,
+        )
+
+    def remove_colorbar(self, id: str) -> None:
+        """Remove a figure-level colorbar registration."""
+        self._ensure_open()
+        self._remove_colorbar(id)
+
+    def share_scale(self, layers: Sequence[PlotLayer], *, id: str | None = None) -> str:
+        """Use one data-driven contour scale across Panel layers."""
+        self._ensure_open()
+        return self._register_scale(layers, id=id)
+
+    def remove_scale(self, id: str) -> None:
+        """Remove a shared contour scale registration."""
+        self._ensure_open()
+        self._remove_scale(id)
+
     def configure(
         self,
         *,

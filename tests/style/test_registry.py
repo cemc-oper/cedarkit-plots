@@ -6,15 +6,13 @@ import pytest
 import xarray as xr
 import matplotlib.colors as mcolors
 
-from cedarkit.plots.colormap import get_ncl_colormap
+from cedarkit.plots.palette import get_palette
 from cedarkit.plots.style import (
     BarbStyle,
     ContourStyle,
     StyleRegistry,
     evaluate_levels,
-    get_rgb_table,
     metadata_from_field,
-    register_rgb_table,
     resolve_style,
 )
 from cedarkit.plots.style.registry import _representative_field
@@ -23,47 +21,9 @@ from cedarkit.plots.style.schema import LinspaceLevels, RangeLevels, StepLevels
 
 FIXTURE_DIR = Path(__file__).parent / "fixtures"
 
-# the 20-color table used by the h_500 fixture (same values as cedar-graph)
-CN_HGT20 = np.array([
-    (255, 255, 255),
-    (0, 0, 0),
-    (20, 100, 210),
-    (40, 130, 240),
-    (80, 165, 245),
-    (150, 210, 250),
-    (180, 240, 250),
-    (203, 248, 253),
-    (255, 255, 255),
-    (180, 250, 170),
-    (120, 245, 115),
-    (55, 210, 60),
-    (30, 180, 30),
-    (15, 160, 15),
-    (0, 0, 255),
-    (255, 0, 0),
-    (255, 140, 0),
-    (238, 18, 137),
-    (255, 121, 121),
-    (211, 211, 211),
-], dtype=float) / 255
-
-
 @pytest.fixture(scope="module")
 def registry():
-    register_rgb_table("cn_hgt20", CN_HGT20)
     return StyleRegistry([FIXTURE_DIR])
-
-
-class TestRgbTable:
-    def test_register_and_get(self):
-        register_rgb_table("test_table", [(1, 0, 0), (0, 1, 0)])
-        table = get_rgb_table("test_table")
-        assert isinstance(table, mcolors.ListedColormap)
-        assert table.N == 2
-
-    def test_unknown_table(self):
-        with pytest.raises(KeyError, match="unknown rgb_table"):
-            get_rgb_table("no_such_table")
 
 
 class TestEvaluateLevels:
@@ -110,10 +70,14 @@ class TestGetStyleH500:
 
     def test_highlight_colors(self, registry):
         style = registry.get_style("h_500")
-        colors = np.asarray(style.colors.colors)
-        expected_index = np.where(style.levels == 588, 1, 14)
-        expected = CN_HGT20[expected_index]
-        np.testing.assert_allclose(colors[:, :3], expected[:, :3])
+        colors = np.asarray(mcolors.to_rgba_array(style.colors))
+        expected = np.repeat(
+            mcolors.to_rgba_array(get_palette("cemc.h_500.cn_dagpm").colors),
+            len(style.levels),
+            axis=0,
+        )
+        expected[np.asarray(style.levels) == 588] = mcolors.to_rgba("black")
+        np.testing.assert_allclose(colors, expected)
 
     def test_label(self, registry):
         style = registry.get_style("h_500")
@@ -123,7 +87,7 @@ class TestGetStyleH500:
         assert label_style.fontsize == 7
         assert label_style.fmt(588) == "588"
         np.testing.assert_allclose(
-            np.asarray(label_style.colors)[:, :3], CN_HGT20[[15]][:, :3]
+            mcolors.to_rgba_array(label_style.colors), [mcolors.to_rgba("red")]
         )
 
 class TestGetStyleT2m:
@@ -138,12 +102,11 @@ class TestGetStyleT2m:
 
     def test_colormap_matches_direct_construction(self, registry):
         style = registry.get_style("t2m", "cn_summer")
-        color_map = get_ncl_colormap("BlAqGrYeOrReVi200")
-        color_index = np.array(
-            [2, 18, 34, 50, 66, 82, 110, 120, 130, 140, 150, 160, 170, 180, 190, 200]
-        ) - 2
-        expected = mcolors.ListedColormap(color_map(color_index))
-        np.testing.assert_allclose(style.colors.colors, expected.colors)
+        expected = get_palette("cemc.t2m.cn_summer")
+        np.testing.assert_allclose(
+            mcolors.to_rgba_array(style.colors.colors),
+            mcolors.to_rgba_array(expected.colors),
+        )
 
 class TestGetStyleBarb:
     def test_barb_style(self, registry):

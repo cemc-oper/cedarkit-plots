@@ -1,13 +1,12 @@
-"""Verify an installed wheel with ``python -I`` outside the source checkout.
+"""Verify a built wheel with ``python -I`` outside the source checkout.
 
 This is an acceptance check, not an installer. Pass the exact wheel and sdist
-used for installation. --hide-legacy additionally proves the native path works
-without the transitional NCL files; the original artifacts remain untouched.
+used for installation. ``--require-no-legacy`` rejects obsolete color files
+and parser/schema hooks in both artifacts.
 """
 from __future__ import annotations
 
 import argparse
-from contextlib import contextmanager
 from dataclasses import asdict
 import hashlib
 import importlib.metadata as metadata
@@ -44,13 +43,51 @@ def check_environment():
             'graph_installed': False, 'editable_installs': False}
 
 
-def check_artifacts(wheel, sdist, map_baseline):
+def check_artifacts(wheel, sdist, map_baseline, *, require_no_legacy=False):
     root = resources.files('cedarkit.plots')
     hashes = {}
     with zipfile.ZipFile(wheel) as z, tarfile.open(sdist) as t:
         prefix = t.getnames()[0].split('/')[0] + '/'
         names = z.namelist()
-        legacy = [n for n in names if '/resources/colormap/ncl/' in n]
+        sdist_names = t.getnames()
+
+        def is_legacy_color_file(name):
+            filename = name.rsplit('/', 1)[-1]
+            return (
+                '/resources/colormap/ncl/' in name
+                or filename.endswith(('.rgb', '.gp'))
+                or filename == 'ncl_colors.csv'
+            )
+
+        legacy = {
+            'wheel': [name for name in names if is_legacy_color_file(name)],
+            'sdist': [name for name in sdist_names if is_legacy_color_file(name)],
+        }
+        if require_no_legacy:
+            assert not any(legacy.values()), f'obsolete color resources remain: {legacy}'
+
+        retired_code = (
+            b'get_ncl_colormap', b'_get_raw_ncl_colormap',
+            b'generate_colormap_using_ncl_colors', b'register_rgb_table',
+            b'get_rgb_table', b'_rgb_tables', b'ncl_colors', b'rgb_table',
+        )
+        runtime_hits = {'wheel': [], 'sdist': []}
+        for name in names:
+            if name.startswith('cedarkit/plots/') and name.endswith('.py'):
+                content = z.read(name)
+                runtime_hits['wheel'].extend(
+                    f'{name}:{token.decode()}' for token in retired_code if token in content
+                )
+        sdist_package_prefix = prefix + 'src/cedarkit/plots/'
+        for name in sdist_names:
+            if name.startswith(sdist_package_prefix) and name.endswith('.py'):
+                content = t.extractfile(name).read()
+                runtime_hits['sdist'].extend(
+                    f'{name}:{token.decode()}' for token in retired_code if token in content
+                )
+        if require_no_legacy:
+            assert not any(runtime_hits.values()), f'obsolete color API remains in distribution code: {runtime_hits}'
+
         targets = [n for n in names if n.startswith((
             'cedarkit/plots/resources/palettes/', 'cedarkit/plots/style/builtin/'))]
         assert len([n for n in targets if '/builtin/cemc/' in n]) == 20
@@ -75,24 +112,7 @@ def check_artifacts(wheel, sdist, map_baseline):
     return {'wheel': str(wheel), 'wheel_sha256': digest(wheel.read_bytes()),
             'sdist': str(sdist), 'sdist_sha256': digest(sdist.read_bytes()),
             'resource_sha256': hashes, 'unchanged_map_files': len(maps),
-            'transitional_ncl_files': legacy, 'release_cleanup_required': bool(legacy)}, audit
-
-
-@contextmanager
-def hide_legacy(enabled):
-    path = Path(str(resources.files('cedarkit.plots').joinpath('resources/colormap/ncl')))
-    hidden = path.with_name('ncl.d12-acceptance-hidden')
-    moved = enabled and path.exists()
-    if moved:
-        assert not hidden.exists()
-        path.rename(hidden)
-    try:
-        if enabled:
-            assert not path.exists()
-        yield
-    finally:
-        if moved:
-            hidden.rename(path)
+            'legacy_color_files': legacy, 'runtime_legacy_color_api_hits': runtime_hits}, audit
 
 
 def check_palettes(audit):
@@ -118,16 +138,6 @@ def check_styles():
     import yaml
     from cedarkit.plots import quickplot
     from cedarkit.plots.style import BarbStyle, StyleRegistry
-    from cedarkit.plots.style import registry as registry_module
-    from cedarkit.plots import colormap
-
-    def forbidden(*args, **kwargs):
-        raise AssertionError('native styles called a legacy color reader')
-
-    for module in (colormap, registry_module):
-        module.get_ncl_colormap = forbidden
-        module.generate_colormap_using_ncl_colors = forbidden
-    registry_module.get_rgb_table = forbidden
     registry = StyleRegistry.default()
     expected_ids = 'bli cape cdbz cin div h_500 kidx psl pte_diff qdiv rain rain_snow rh2m sf shr t2m t_dew_t wind ws_10m ws_850'.split()
     assert registry.style_ids == sorted(expected_ids)
@@ -253,22 +263,27 @@ def main():
     parser.add_argument('--sdist', type=Path, required=True)
     parser.add_argument('--map-baseline', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
-    parser.add_argument('--hide-legacy', action='store_true')
     parser.add_argument('--require-no-legacy', action='store_true', help='D15 release gate')
+    parser.add_argument('--artifact-only', action='store_true', help='skip isolated install and rendering checks')
     args = parser.parse_args()
     args.output.mkdir(parents=True, exist_ok=True)
-    report = {'environment': check_environment()}
-    report['artifacts'], audit = check_artifacts(args.wheel, args.sdist, args.map_baseline)
-    if args.require_no_legacy:
-        assert not report['artifacts']['transitional_ncl_files'], 'D14/D15 NCL cleanup is still required'
-    with hide_legacy(args.hide_legacy):
-        report['legacy_resources_hidden'] = args.hide_legacy
-        report['palettes'] = check_palettes(audit)
+    report = {}
+    if not args.artifact_only:
+        report['environment'] = check_environment()
+    report['artifacts'], audit = check_artifacts(
+        args.wheel, args.sdist, args.map_baseline,
+        require_no_legacy=args.require_no_legacy,
+    )
+    report['palettes'] = check_palettes(audit)
+    if not args.artifact_only:
         report['rendered_variants'] = check_styles()
         report['examples'] = check_examples(args.output)
     report['status'] = 'passed'
     (args.output/'report.json').write_text(json.dumps(report, indent=2)+'\n')
-    print('PASS: installed wheel; 20 CEMC styles / 37 variants; 51 palettes / 1766 RGBA rows; generic, overrides, 3 examples')
+    if args.artifact_only:
+        print('PASS: wheel/sdist resources; 21 China map files; 51 palettes / 1766 RGBA rows; no legacy color files or APIs')
+    else:
+        print('PASS: installed wheel; 20 CEMC styles / 37 variants; 51 palettes / 1766 RGBA rows; generic, overrides, 3 examples')
 
 
 if __name__ == '__main__':

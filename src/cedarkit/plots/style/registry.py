@@ -11,7 +11,6 @@ import matplotlib.colors as mcolors
 import xarray as xr
 
 from . import BarbStyle, ColorbarStyle, ContourLabelStyle, ContourStyle, LevelStep, Style
-from ..colormap import generate_colormap_using_ncl_colors, get_ncl_colormap
 from ..palette import get_palette
 from .schema import (
     ColormapSpec,
@@ -27,29 +26,6 @@ from .schema import (
     load_style_file,
 )
 from cedarkit.plots.units import canonical_unit, validate_temperature_kind
-
-
-# ---------------------------------------------------------------------------
-# named RGB tables
-# ---------------------------------------------------------------------------
-
-_rgb_tables: Dict[str, mcolors.ListedColormap] = {}
-
-
-def register_rgb_table(name: str, colors: Union[Sequence, mcolors.ListedColormap]) -> None:
-    """Register a named RGB table for ``colormap.rgb_table`` references."""
-    if isinstance(colors, mcolors.ListedColormap):
-        _rgb_tables[name] = colors
-    else:
-        _rgb_tables[name] = mcolors.ListedColormap(list(colors), name=name)
-
-
-def get_rgb_table(name: str) -> mcolors.ListedColormap:
-    try:
-        return _rgb_tables[name]
-    except KeyError:
-        known = ", ".join(sorted(_rgb_tables)) or "<none>"
-        raise KeyError(f"unknown rgb_table {name!r}; registered tables: {known}") from None
 
 
 # ---------------------------------------------------------------------------
@@ -95,20 +71,17 @@ class _ColorSource:
     """Intermediate result of a colormap spec.
 
     ``colors`` is the value for ``ContourStyle.colors`` when no per-level
-    expansion is needed. ``table``/``index`` keep the underlying indexed
-    source for highlight/label expansion; ``index`` may be scalar (broadcast
-    to all levels) or an explicit per-level list.
+    expansion is needed. ``table`` retains the named palette for highlight
+    and label color-index expansion.
     """
 
     def __init__(
             self,
             colors: Any,
             table: Optional[mcolors.ListedColormap] = None,
-            index: Optional[Union[int, np.ndarray]] = None,
     ):
         self.colors = colors
         self.table = table
-        self.index = index
 
 
 def _resolve_color_source(spec: Union[str, ColormapSpec], name: str) -> _ColorSource:
@@ -125,39 +98,6 @@ def _resolve_color_source(spec: Union[str, ColormapSpec], name: str) -> _ColorSo
             return _ColorSource(colors=colors[0])
         return _ColorSource(colors=mcolors.ListedColormap(colors, name=name))
 
-    if spec.ncl_colors is not None:
-        return _ColorSource(colors=generate_colormap_using_ncl_colors(spec.ncl_colors, name=name))
-
-    if spec.ncl is not None:
-        if spec.count is not None:
-            cmap = get_ncl_colormap(
-                spec.ncl,
-                count=spec.count,
-                spread_start=spec.spread_start,
-                spread_end=spec.spread_end,
-            )
-            return _ColorSource(colors=cmap)
-        table = get_ncl_colormap(spec.ncl)
-        if table is None:
-            raise ValueError(f"ncl colormap not found: {spec.ncl!r}")
-        if spec.index is None:
-            return _ColorSource(colors=table, table=table)
-        index = np.atleast_1d(np.asarray(spec.index)) + spec.index_offset
-        colors = mcolors.ListedColormap(table(index), name=name)
-        if isinstance(spec.index, int):
-            return _ColorSource(colors=colors, table=table, index=int(index[0]))
-        return _ColorSource(colors=colors, table=table, index=index)
-
-    if spec.rgb_table is not None:
-        table = get_rgb_table(spec.rgb_table)
-        if spec.index is None:
-            return _ColorSource(colors=table, table=table)
-        index = np.atleast_1d(np.asarray(spec.index)) + spec.index_offset
-        colors = mcolors.ListedColormap(table(index), name=name)
-        if isinstance(spec.index, int):
-            return _ColorSource(colors=colors, table=table, index=int(index[0]))
-        return _ColorSource(colors=colors, table=table, index=index)
-
     raise ValueError(f"invalid colormap spec: {spec!r}")
 
 
@@ -170,18 +110,7 @@ def _expand_per_level_colors(
     """Expand base colors + highlight rules into per-level colors."""
     n = len(levels)
 
-    if source.table is not None and source.index is not None:
-        if isinstance(source.index, (int, np.integer)):
-            index_array = np.full(n, source.index, dtype=int)
-        else:
-            index_array = np.asarray(source.index, dtype=int)
-            if len(index_array) not in (n, n + 1):
-                raise ValueError(
-                    f"style {style_name!r}: highlight with per-level colors needs "
-                    f"one color index per level ({n}, or {n + 1}), got {len(index_array)}"
-                )
-        rgba = [tuple(source.table(i)) for i in index_array]
-    elif isinstance(source.colors, mcolors.ListedColormap):
+    if isinstance(source.colors, mcolors.ListedColormap):
         rgba = [tuple(c) for c in source.colors.colors]
         if len(rgba) == 1:
             rgba = rgba * n
@@ -211,7 +140,7 @@ def _expand_per_level_colors(
                 if source.table is None:
                     raise ValueError(
                         f"style {style_name!r}: highlight color_index requires "
-                        f"an indexed colormap source (ncl/rgb_table)"
+                        f"a palette source"
                     )
                 rgba[pos] = tuple(source.table(highlight.color_index))
             elif highlight.color is not None:
@@ -267,7 +196,7 @@ def _build_label_style(
         if source is None or source.table is None:
             raise ValueError(
                 f"style {style_name!r}: label color_index requires an indexed "
-                f"colormap source (ncl/rgb_table)"
+                f"palette source"
             )
         index = np.atleast_1d(label_spec.color_index)
         colors = source.table(index)
@@ -339,19 +268,9 @@ def build_style(
         if source is None:
             source = _ColorSource(colors=None)
         colors = _expand_per_level_colors(source, levels, highlights, style_name)
-    elif (
-            source is not None
-            and isinstance(source.index, (int, np.integer))
-            and levels is not None
-            and not isinstance(levels, LevelStep)
-            and not variant.fill
-    ):
-        # scalar color index on a line contour: broadcast to per-level colors
-        colors = _expand_per_level_colors(source, levels, [], style_name)
-
     # Native palette rows describe discrete regions, including extension rows.
     # Compile them into the core's interval cmap + special-color contract.
-    # Line palettes are positional: the final extra row in legacy tables is
+    # Line palettes are positional: the final extra row in an audited palette is
     # unused by contour(), never interpolated across the level range.
     native = isinstance(variant.colormap, ColormapSpec) and variant.colormap.palette is not None
     if native and levels is not None and not isinstance(levels, LevelStep):

@@ -105,7 +105,7 @@ colormap: { colors: ["#ff0000", "#00ff00"] }
 `get_style("shr:cn_fill", overrides={"levels": levels})` 构建固定离散样式，
 再使用同一组等级构建 cn_line；不依赖 Style 取字段值。
 月份、降水时段和产品图层组合仍由产品选择，不在样式库自动推断。
-旧 ncl/rgb_table/ncl_colors schema 只供 D14 待迁移调用，内置样式不使用。
+运行时样式只接受具名原生 palette 或显式颜色，不解析 NCL 表或运行时注册表。
 
 ### highlight：特征线
 

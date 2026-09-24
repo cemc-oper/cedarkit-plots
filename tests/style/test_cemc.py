@@ -6,6 +6,7 @@ import matplotlib.colors as colors
 import numpy as np
 import pytest
 import xarray as xr
+import yaml
 
 from cedarkit.plots import Panel
 from cedarkit.plots.config import LayoutSpec
@@ -16,18 +17,18 @@ from cedarkit.plots.style import registry as module
 from cedarkit.plots.style.schema import StyleVariant
 
 ROOT = Path(__file__).resolve().parents[2]
-RECIPES = json.loads((ROOT / 'tools/palette_recipes.json').read_text())['styles']
 HANDOFF = json.loads((ROOT / 'tools/style_palette_map.json').read_text())
+BUILTIN_DIR = ROOT / 'src/cedarkit/plots/style/builtin/cemc'
+BUILTIN_STYLES = {}
+for path in BUILTIN_DIR.glob('*.yml'):
+    config = yaml.safe_load(path.read_text())
+    for variant, spec in config['styles'].items():
+        BUILTIN_STYLES[f"cemc.{config['id']}.{variant}"] = spec
 IDS = 'bli cape cdbz cin div h_500 kidx psl pte_diff qdiv rain rain_snow rh2m sf shr t2m t_dew_t wind ws_10m ws_850'.split()
 
 
 @pytest.fixture
 def registry(monkeypatch):
-    def forbidden(*args, **kwargs):
-        raise AssertionError('built-in CEMC must not read NCL or registered graph tables')
-    monkeypatch.setattr(module, 'get_ncl_colormap', forbidden)
-    monkeypatch.setattr(module, 'generate_colormap_using_ncl_colors', forbidden)
-    monkeypatch.setattr(module, 'get_rgb_table', forbidden)
     monkeypatch.setattr(module.importlib.metadata, 'entry_points', lambda **kwargs: [])
     monkeypatch.delenv('CEDARKIT_STYLE_PATH', raising=False)
     return StyleRegistry.default()
@@ -54,7 +55,7 @@ def test_complete_catalog(registry):
     assert wind.barb_increments == dict(half=2, full=4, flag=20)
 
 
-@pytest.mark.parametrize('name', sorted(RECIPES))
+@pytest.mark.parametrize('name', sorted(BUILTIN_STYLES))
 def test_every_variant_settings_and_rendered_colors(name, registry):
     _, identifier, variant = name.split('.')
     # Shear levels are supplied by the product; no invented fixed thresholds.
@@ -62,21 +63,35 @@ def test_every_variant_settings_and_rendered_colors(name, registry):
     duration = registry._lookup(identifier, variant)[3].accumulation_hours
     metadata = {'units': 'mm', 'accumulation_hours': duration} if duration is not None else None
     style = registry.get_style(identifier, variant, metadata=metadata, overrides=overrides)
-    old = StyleVariant.model_validate(RECIPES[name])
-    expected_levels = np.arange(16) if identifier == 'shr' else module.evaluate_levels(old.levels)
+    spec = StyleVariant.model_validate(BUILTIN_STYLES[name])
+    if isinstance(style, BarbStyle):
+        assert spec.type == 'barb'
+        if spec.barb_increments is not None:
+            assert style.barb_increments == spec.barb_increments
+        assert style.barbcolor == spec.barbcolor
+        assert style.flagcolor == spec.flagcolor
+        assert style.linewidth == spec.linewidth
+        attrs = {} if style.expected_units is None else {'units': style.expected_units}
+        u = xr.DataArray(np.ones((10, 12)) * 8, dims=('y', 'x'), attrs=attrs)
+        with Panel() as panel:
+            layer = panel.add_chart().barbs(u, u, style=style)
+            panel.render()
+            assert layer.results['main'].artists
+        return
+    expected_levels = np.arange(16) if identifier == 'shr' else module.evaluate_levels(spec.levels)
     np.testing.assert_array_equal(style.levels, expected_levels)
-    if old.expected_units is not None:
-        assert style.expected_units == old.expected_units
-    assert style.fill == old.fill
-    assert style.linestyles == old.linestyles
-    assert style.label == (old.label is not None)
-    if old.label:
+    if spec.expected_units is not None:
+        assert style.expected_units == spec.expected_units
+    assert style.fill == spec.fill
+    assert style.linestyles == spec.linestyles
+    assert style.label == (spec.label is not None)
+    if spec.label:
         for key in ('fontsize', 'inline', 'inline_spacing', 'background_color', 'manual', 'zorder'):
-            assert getattr(style.label_style, key) == getattr(old.label, key)
-        if old.label.fmt:
-            assert style.label_style.fmt(588) == old.label.fmt.format(588)
-    if old.colorbar:
-        assert style.colorbar_style.label == old.colorbar.label
+            assert getattr(style.label_style, key) == getattr(spec.label, key)
+        if spec.label.fmt:
+            assert style.label_style.fmt(588) == spec.label.fmt.format(588)
+    if spec.colorbar:
+        assert style.colorbar_style.label == spec.colorbar.label
     palette = get_palette(name)
     with Panel() as panel:
         chart = panel.add_chart()
@@ -86,9 +101,9 @@ def test_every_variant_settings_and_rendered_colors(name, registry):
         artist = layer.results['main'].mappable
         if style.label:
             assert artist.labelTexts
-            if old.label.fontsize is not None:
-                assert all(text.get_fontsize() == old.label.fontsize for text in artist.labelTexts)
-            if old.label.background_color is not None:
+            if spec.label.fontsize is not None:
+                assert all(text.get_fontsize() == spec.label.fontsize for text in artist.labelTexts)
+            if spec.label.background_color is not None:
                 assert all(text.get_bbox_patch() is not None for text in artist.labelTexts)
             if name == 'cemc.h_500.cn_dagpm':
                 assert all(colors.to_rgba(text.get_color()) == colors.to_rgba('red') for text in artist.labelTexts)
@@ -110,12 +125,12 @@ def test_every_variant_settings_and_rendered_colors(name, registry):
                 if 'color' in rule:
                     expected[np.isclose(expected_levels, rule['level'])] = colors.to_rgba(rule['color'])
             np.testing.assert_allclose(artist.get_edgecolors(), expected)
-            baseline = old.linewidth if old.linewidth is not None else .7
+            baseline = spec.linewidth if spec.linewidth is not None else .7
             widths = np.full(len(expected_levels), baseline)
             for rule in HANDOFF[name].get('highlights', []):
                 if rule.get('linewidth') is not None:
                     widths[np.isclose(expected_levels, rule['level'])] = rule['linewidth']
-            if old.linewidth is not None or old.highlight:
+            if spec.linewidth is not None or spec.highlight:
                 np.testing.assert_allclose(artist.get_linewidths(), widths)
 
 

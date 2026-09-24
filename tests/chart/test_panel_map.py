@@ -1,5 +1,7 @@
 """D06 map subplots, CRS transforms and multi-target layer results."""
 
+import hashlib
+
 import matplotlib
 
 matplotlib.use("Agg")
@@ -21,6 +23,7 @@ from cedarkit.plots.config import (
 from cedarkit.plots.domains import Domain
 from cedarkit.plots.errors import ContentError
 from cedarkit.plots.map import MapLoader, MapType
+from cedarkit.plots.map.default import DefaultMapLoader
 from cedarkit.plots.style import BarbStyle, ContourStyle
 
 
@@ -30,6 +33,25 @@ class RecordingLoader(MapLoader):
     def get_feature(self, name: str, **kwargs):
         self.calls.append((name, dict(kwargs)))
         return []
+
+
+def test_default_china_features_match_resource_baseline():
+    expected = {
+        "china_coastline": (0, 0, "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"),
+        "china_borders": (1, 1367, "8d17d094bf2707e6e05c05f3422137ab999781cd98ea36b5ce522b5f42ebe663"),
+        "china_provinces": (0, 0, "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"),
+        "china_rivers": (0, 0, "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"),
+        "china_nine_lines": (1, 10, "14464135431ee7f6d7558721c46294fa5891609a509b07b4dac2011b91f6796b"),
+        "global_borders": (0, 0, "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"),
+    }
+    loader = DefaultMapLoader()
+    for name, (feature_count, geometry_count, expected_hash) in expected.items():
+        features = loader.get_feature(name)
+        geometries = [geometry for feature in features for geometry in feature.geometries()]
+        digest = hashlib.sha256(b"".join(geometry.wkb for geometry in geometries)).hexdigest()
+        assert (len(features), len(geometries), digest) == (
+            feature_count, geometry_count, expected_hash,
+        )
 
 
 def field(offset: float = 0) -> xr.DataArray:

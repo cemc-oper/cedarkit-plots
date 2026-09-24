@@ -36,7 +36,8 @@ palette ID 为完整名称，不受 StyleRegistry 当前 profile 影响。
 
 catalog 包含 51 个表；来源版本、逐文件 SHA256、MeteoSwiss/Gist 原始注记与许可通知
 在包内 `resources/palettes/`。离线再生成用 `tools/convert_palettes.py --check`，
-可加 `--source-dir src/cedarkit/plots/resources/colormap/ncl` 核验旧输入字节。
+可加 `--source-dir <original-source-directory>` 核验单独取得的原始输入字节；原始 NCL
+表和命名颜色 CSV 不再进入运行环境或发行包。
 
 ## 可执行色表预览
 
@@ -70,4 +71,4 @@ rain_style = ContourStyle(
 metadata={"units": "mm", "accumulation_hours": 24})`。
 原生 palette YAML 的固定填色等级结合 `extend` 编译为内部区间颜色与特殊颜色；
 `get_palette` 本身返回原表，不隐式改变等级或保留扩展位置。
-旧解析器和原始 NCL 文件仅供尚未迁移的下游调用，计划在 D14/D15 删除。
+运行时只读取审核后的原生 catalog；来源快照、逐色差异和许可记录用于离线复核。

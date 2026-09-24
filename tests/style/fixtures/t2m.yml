@@ -10,18 +10,12 @@ optimal: cn_summer
 styles:
   cn_summer:
     type: contour
-    colormap:
-      ncl: BlAqGrYeOrReVi200
-      index: [2, 18, 34, 50, 66, 82, 110, 120, 130, 140, 150, 160, 170, 180, 190, 200]
-      index_offset: -2
+    colormap: { palette: cemc.t2m.cn_summer }
     levels: [-12, -8, -4, 0, 4, 8, 12, 16, 20, 24, 28, 32, 36, 40, 44]
     fill: true
 
   cn_winter:
     type: contour
-    colormap:
-      ncl: BlAqGrYeOrReVi200
-      index: [2, 12, 22, 32, 42, 52, 62, 72, 82, 92, 102, 112, 122, 132, 142, 152]
-      index_offset: -2
+    colormap: { palette: cemc.t2m.cn_winter }
     levels: [-24, -20, -16, -12, -8, -4, 0, 4, 8, 12, 16, 20, 24, 28, 32]
     fill: true

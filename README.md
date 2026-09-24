@@ -22,7 +22,7 @@ higher-level packages such as `cedar-graph`.
   forecast products with built-in configuration presets.
 - Define contours, fills, wind barbs, and colorbars with reusable style
   libraries.
-- Use bundled NCL colormaps and China shapefile resources.
+- Use bundled native palettes and China shapefile resources.
 - Load and generate plot products from declarative YAML recipes.
 
 ## Installation
@@ -119,5 +119,7 @@ Copyright &copy; 2021-2026, developers at cemc-oper.
 
 - `cedarkit/plots/resources/map/china-shapefiles` is from
   [dongli/china-shapefiles](https://github.com/dongli/china-shapefiles).
-- `cedarkit/plots/resources/colormap/ncl` is from
-  [NCL](https://github.com/NCAR/ncl).
+- Native palettes preserve audited colors from NCL and other sources. Their
+  provenance, checksums, and license notices are recorded in
+  `tools/palette_sources.json` and `cedarkit/plots/resources/palettes/`;
+  original NCL tables and their parser are not included in runtime resources.

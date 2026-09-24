@@ -122,54 +122,28 @@ LevelsSpec = Union[List[Union[int, float]], RangeLevels, LinspaceLevels, StepLev
 
 class ColormapSpec(StrictModel):
     """
-    Colormap source. Exactly one of ``palette`` / ``ncl`` / ``rgb_table`` / ``colors`` /
-    ``ncl_colors`` must be set. A plain matplotlib colormap name is written
-    as a bare string instead of this mapping.
+    Colormap source. Exactly one of ``palette`` or ``colors`` must be set.
+    A plain matplotlib colormap name is written as a bare string instead of
+    this mapping.
     """
 
     palette: Optional[str] = None
-    ncl: Optional[str] = None
-    rgb_table: Optional[str] = None
     colors: Optional[List[Any]] = None
-    ncl_colors: Optional[List[str]] = None
-
-    index: Optional[Union[int, List[int]]] = None
-    index_offset: int = 0
-    count: Optional[int] = None
-    spread_start: Optional[int] = None
-    spread_end: Optional[int] = None
 
     @model_validator(mode="after")
     def exactly_one_source(self) -> "ColormapSpec":
         sources = [
             name
-            for name in ("palette", "ncl", "rgb_table", "colors", "ncl_colors")
+            for name in ("palette", "colors")
             if getattr(self, name) is not None
         ]
         if len(sources) != 1:
             raise ValueError(
-                f"colormap must set exactly one source "
-                f"(palette/ncl/rgb_table/colors/ncl_colors), got: {sources}"
+                f"colormap must set exactly one source (palette/colors), got: {sources}"
             )
         if self.palette is not None:
             if not self.palette:
                 raise ValueError("palette ID cannot be empty")
-            if self.index is not None or self.index_offset != 0 or any(
-                getattr(self, key) is not None for key in ("count", "spread_start", "spread_end")
-            ):
-                raise ValueError("native palette transformations must use a named derived palette")
-        if self.colors is not None or self.ncl_colors is not None:
-            for key in ("index", "index_offset", "count", "spread_start", "spread_end"):
-                value = getattr(self, key)
-                if key == "index_offset":
-                    if value != 0:
-                        raise ValueError(f"colormap.{key} is only valid with ncl/rgb_table")
-                elif value is not None:
-                    raise ValueError(f"colormap.{key} is only valid with ncl/rgb_table")
-        if self.rgb_table is not None:
-            for key in ("count", "spread_start", "spread_end"):
-                if getattr(self, key) is not None:
-                    raise ValueError(f"colormap.{key} is only valid with ncl")
         return self
 
 

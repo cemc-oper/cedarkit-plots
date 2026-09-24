@@ -42,27 +42,19 @@ class TestCriteriaEntry:
 
 
 class TestColormapSpec:
-    def test_ncl_source(self):
-        spec = ColormapSpec(ncl="BlAqGrYeOrReVi200", index=[2, 18], index_offset=-2)
-        assert spec.ncl == "BlAqGrYeOrReVi200"
+    def test_native_palette_source(self):
+        spec = ColormapSpec(palette="cemc.t2m.cn_summer")
+        assert spec.palette == "cemc.t2m.cn_summer"
 
     def test_exactly_one_source(self):
         with pytest.raises(ValueError, match="exactly one source"):
-            ColormapSpec(ncl="a", rgb_table="b")
-        with pytest.raises(ValueError, match="exactly one source"):
             ColormapSpec()
+        with pytest.raises(ValueError, match="exactly one source"):
+            ColormapSpec(palette="cemc.t2m.cn_summer", colors=["red"])
 
-    def test_index_only_with_ncl_or_rgb_table(self):
-        with pytest.raises(ValueError, match="only valid with ncl"):
-            ColormapSpec(colors=["red"], index=[1])
-        with pytest.raises(ValueError, match="only valid with ncl"):
-            ColormapSpec(ncl_colors=["White"], count=3)
-
-    def test_count_only_with_ncl(self):
-        with pytest.raises(ValueError, match="only valid with ncl"):
-            ColormapSpec(rgb_table="t", count=3)
-        spec = ColormapSpec(ncl="WhBlGrYeRe", count=10, spread_start=98, spread_end=0)
-        assert spec.count == 10
+    def test_empty_palette_id_rejected(self):
+        with pytest.raises(ValueError, match="palette ID cannot be empty"):
+            ColormapSpec(palette="")
 
 
 class TestHighlightEntry:

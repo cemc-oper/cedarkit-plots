@@ -39,8 +39,8 @@ Repository = "https://github.com/cemc-oper/cedarkit-plots.git"
 cedarkit-plots = "cedarkit.plots.cli:main"
 
 [project.optional-dependencies]
-workflow = ["reki>=2026.9.0", "cedarkit-comp>=2025.7.0"]
-test = ["pytest", "scipy", "reki>=2026.9.0", "cedarkit-comp>=2025.7.0"]
+workflow = ["reki>=2026.9.0", "cedarkit-comp>=2026.7.0"]
+test = ["pytest", "scipy", "reki>=2026.9.0", "cedarkit-comp>=2026.7.0"]
 cov = ["pytest-cov"]
 docs = [
     "sphinx>=7.3",
