@@ -407,6 +407,8 @@ class AnnotationSpec:
 
 @dataclass(frozen=True, kw_only=True, slots=True)
 class DecorationSpec:
+    """ID-keyed decorations, with ``"*"`` available as a colorbar fallback."""
+
     titles: Mapping[str, TitleSpec] = field(default=UNSET)
     colorbars: Mapping[str, ColorbarSpec] = field(default=UNSET)
 
@@ -570,12 +572,15 @@ class BasemapSpec:
 
 @dataclass(frozen=True, kw_only=True, slots=True)
 class SubplotSpec:
+    """Subplot drawing options, including the anchor used after aspect fitting."""
+
     enabled: bool = field(default=UNSET)
     kind: str = field(default=UNSET)
     domain: Any = field(default=UNSET)
     map_crs: Any = field(default=UNSET)
     position: Rect = field(default=UNSET)
     aspect: Any = field(default=UNSET)
+    anchor: str = field(default=UNSET)
     axis: AxisSpec = field(default=UNSET)
     basemap: BasemapSpec | None = field(default=UNSET)
     annotations: Mapping[str, AnnotationSpec] = field(default=UNSET)
@@ -595,6 +600,13 @@ class SubplotSpec:
         if _is_declared(self.aspect):
             if self.aspect not in {"auto", "equal"}:
                 _check_finite(self.aspect, "aspect", positive=True)
+        if _is_declared(self.anchor) and self.anchor not in {
+            "C", "SW", "S", "SE", "E", "NE", "N", "NW", "W",
+        }:
+            _fail(
+                "anchor must be a Matplotlib axes anchor such as C or SW",
+                path=("anchor",),
+            )
         if _is_declared(self.axis) and not isinstance(self.axis, AxisSpec):
             _fail("axis must be AxisSpec", path=("axis",))
         if _is_declared(self.basemap) and self.basemap is not None and not isinstance(self.basemap, BasemapSpec):
@@ -1208,7 +1220,9 @@ def resolve_subplot(
     zorder = (0.0 if subplot_id == "main" else 1.0) if not _is_declared(value.zorder) else value.zorder
     return SubplotSpec(
         enabled=enabled, kind=kind, domain=domain, map_crs=None if not _is_declared(map_crs) else map_crs,
-        position=position, aspect=aspect, axis=axis, basemap=basemap,
+        position=position, aspect=aspect,
+        anchor="C" if not _is_declared(value.anchor) else value.anchor,
+        axis=axis, basemap=basemap,
         annotations=resolved_annotations, zorder=zorder,
     )
 

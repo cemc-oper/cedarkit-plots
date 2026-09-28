@@ -15,7 +15,7 @@ kernelspec:
 
 EastAsia 展示预设为一个已创建的 Chart 提供主地图及可选南海附图。温度层可以
 指向全部子图，风羽层只绘制到主图。以下固定合成场在文档构建时执行，图像直接
-显示在页面中，不写入仓库文件。
+显示在页面中，不写入仓库文件。风向杆每隔约 3° 取样一次，以减少对底图的遮挡。
 
 ```{code-cell} python
 %matplotlib inline
@@ -36,7 +36,9 @@ temperature = east_asia_temperature_field(
     standard_name="air_temperature",
     cemc_name="t2m",
 )
-u, v = east_asia_wind_fields()
+wind_longitudes = np.r_[np.arange(70.0, 140.0, 3.0), 140.0]
+wind_latitudes = np.r_[np.arange(15.0, 55.0, 3.0), 55.0]
+u, v = east_asia_wind_fields(coords=(wind_longitudes, wind_latitudes))
 
 with Panel(template=east_asia(with_inset=True)) as panel:
     chart = panel.add_chart(id="weather")

@@ -22,4 +22,5 @@ def add_map_info_text(ax: Any, *, x: float, y: float, text: str) -> Any:
             "facecolor": "white",
             "linewidth": 0.5,
         },
+        zorder=1000,
     )

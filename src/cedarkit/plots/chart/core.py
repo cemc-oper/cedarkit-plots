@@ -1818,7 +1818,10 @@ def _render_colorbars(
                 code="incompatible_scale",
             )
         owner = binding.owner
-        decoration = _decoration_mapping(owner, effective, "colorbars").get(binding.id)
+        colorbar_specs = _decoration_mapping(owner, effective, "colorbars")
+        decoration = colorbar_specs.get(binding.id)
+        if decoration is None:
+            decoration = colorbar_specs.get("*")
         decoration = decoration or ColorbarSpec()
         orientation = "vertical" if decoration.orientation is UNSET else decoration.orientation
         ticks = None if decoration.ticks is UNSET else decoration.ticks
@@ -2423,17 +2426,20 @@ def _create_subplots(
                 )
             ax.set_facecolor(spec.theme.axes_facecolor)
             ax.tick_params(labelsize=spec.theme.tick_fontsize)
-            ax.set_aspect(subplot_spec.aspect)
-            ax.set_zorder(subplot_spec.zorder)
-            ax.apply_aspect()
+            if map_axis:
+                # Establish the map extent before applying aspect correction.
+                # Child axes are positioned from this final parent box below.
+                _render_basemap(ax, subplot_spec)
             _apply_axis_spec(
                 ax,
                 subplot_spec.axis,
                 map_axis=map_axis,
                 tick_crs=(subplot_spec.domain.extent_crs if map_axis else None),
             )
+            ax.set_aspect(subplot_spec.aspect, anchor=subplot_spec.anchor)
+            ax.set_zorder(subplot_spec.zorder)
+            ax.apply_aspect()
             if map_axis:
-                _render_basemap(ax, subplot_spec)
                 result[subplot_id] = MapSubplot(
                     chart,
                     subplot_id,

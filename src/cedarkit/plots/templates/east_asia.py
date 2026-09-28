@@ -9,6 +9,7 @@ import cartopy.crs as ccrs
 from cedarkit.plots.config import (
     AxisSpec,
     BasemapSpec,
+    ColorbarSpec,
     DecorationSpec,
     GridlineSpec,
     LayoutSpec,
@@ -32,11 +33,20 @@ from . import ChartTemplate, PanelTemplate
 
 
 _MAIN_POSITION = Rect(space="chart", bounds=(.125, .2, .75, .6))
+_INSET_WIDTH = .1
+_INSET_HEIGHT = .14
 _INSET_POSITION = Rect(
     space="subplot",
     subplot="main",
-    bounds=(0.0, 0.0, .1 / .75, .14 / .6),
+    bounds=(0.0, 0.0, _INSET_WIDTH / .75, _INSET_HEIGHT / .6),
 )
+
+
+def _axes_aspect_for_box(domain: Any, box_aspect: float) -> float:
+    """Return Matplotlib's aspect value for a target map axes width/height."""
+
+    west, east, south, north = domain.extent
+    return (east - west) / box_aspect / (north - south)
 
 
 def _require_bool(value: Any, name: str) -> bool:
@@ -127,14 +137,14 @@ def _main_axis() -> AxisSpec:
 
 
 def _sub_axis() -> AxisSpec:
-    xticks = (110, 120)
-    yticks = (10, 20)
     return AxisSpec(
-        xticks=xticks,
-        yticks=yticks,
+        # Keep coordinate labels on the main map only. The inset retains its
+        # gridlines without duplicate labels along the shared lower-left edges.
+        xticks=(),
+        yticks=(),
         gridlines=GridlineSpec(
-            xlocators=xticks,
-            ylocators=yticks,
+            xlocators=(110, 120),
+            ylocators=(10, 20),
             linewidth=.2,
         ),
     )
@@ -181,11 +191,24 @@ def east_asia_chart(
             domain=SOUTH_CHINA_SEA_DOMAIN,
             map_crs=ccrs.PlateCarree(),
             position=_INSET_POSITION,
-            aspect=.1 / .14,
+            aspect=_axes_aspect_for_box(
+                SOUTH_CHINA_SEA_DOMAIN,
+                _INSET_WIDTH / _INSET_HEIGHT,
+            ),
+            anchor="SW",
             axis=_sub_axis(),
             basemap=sub_basemap,
         )
-    return ChartTemplate(subplots=subplots)
+    return ChartTemplate(
+        subplots=subplots,
+        decorations=DecorationSpec(
+            colorbars={
+                "*": ColorbarSpec(
+                    position=Rect(space="chart", bounds=(.89, .275, .025, .45)),
+                ),
+            },
+        ),
+    )
 
 
 def east_asia(
@@ -199,8 +222,8 @@ def east_asia(
     """Return a single-Chart Panel preset using :func:`east_asia_chart`."""
 
     return PanelTemplate(
-        layout=LayoutSpec(rows=1, columns=1, expected_charts=1),
-        theme=Theme(),
+        layout=LayoutSpec(rows=1, columns=1, figsize=(8.0, 8.0), dpi=160, expected_charts=1),
+        theme=Theme(title_fontsize=14, tick_fontsize=9),
         chart_defaults=east_asia_chart(
             with_inset=with_inset,
             main_basemap=main_basemap,

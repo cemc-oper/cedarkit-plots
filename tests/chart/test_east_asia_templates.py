@@ -14,6 +14,7 @@ from cedarkit.plots.config import (
     AxisSpec,
     BasemapSpec,
     ChartSpec,
+    ColorbarSpec,
     DecorationSpec,
     GridlineSpec,
     LayoutSpec,
@@ -98,10 +99,15 @@ def direct_chart_spec(main: BasemapSpec, sub: BasemapSpec) -> ChartSpec:
                     subplot="main",
                     bounds=(0.0, 0.0, .1 / .75, .14 / .6),
                 ),
-                aspect=.1 / .14,
+                aspect=(
+                    (SOUTH_CHINA_SEA_DOMAIN.extent[1] - SOUTH_CHINA_SEA_DOMAIN.extent[0])
+                    / (.1 / .14)
+                    / (SOUTH_CHINA_SEA_DOMAIN.extent[3] - SOUTH_CHINA_SEA_DOMAIN.extent[2])
+                ),
+                anchor="SW",
                 axis=AxisSpec(
-                    xticks=(110, 120),
-                    yticks=(10, 20),
+                    xticks=(),
+                    yticks=(),
                     gridlines=GridlineSpec(
                         xlocators=(110, 120),
                         ylocators=(10, 20),
@@ -110,7 +116,14 @@ def direct_chart_spec(main: BasemapSpec, sub: BasemapSpec) -> ChartSpec:
                 ),
                 basemap=sub,
             ),
-        }
+        },
+        decorations=DecorationSpec(
+            colorbars={
+                "*": ColorbarSpec(
+                    position=Rect(space="chart", bounds=(.89, .275, .025, .45)),
+                ),
+            },
+        ),
     )
 
 
