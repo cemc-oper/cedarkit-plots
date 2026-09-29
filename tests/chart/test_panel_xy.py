@@ -113,13 +113,17 @@ def test_barbs_register_and_render_on_xy_axes():
 
 
 def test_context_manager_save_and_close_are_owned_by_panel(tmp_path):
+    existing_figures = set(plt.get_fignums())
     with Panel() as panel:
         chart = panel.add_chart(id="weather")
         chart.contourf(field(), id="temperature", style=style())
         output = tmp_path / "xy.png"
         panel.save(output)
         assert output.exists() and output.stat().st_size > 0
+        owned_figure_number = panel.fig.number
+        assert owned_figure_number not in existing_figures
     assert panel.closed
     with pytest.raises(ClosedError):
         panel.render()
-    assert plt.get_fignums() == []
+    assert set(plt.get_fignums()) == existing_figures
+    assert owned_figure_number not in plt.get_fignums()

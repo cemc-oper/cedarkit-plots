@@ -173,7 +173,7 @@ def test_direct_and_panel_preset_entries_have_equal_effective_map_configuration(
         )
     )
     direct_panel = Panel(
-        layout=LayoutSpec(rows=1, columns=1, expected_charts=1),
+        layout=LayoutSpec(rows=1, columns=1, dpi=160, expected_charts=1),
         theme=Theme(),
         chart_defaults=direct_chart_spec(main, sub),
         decorations=DecorationSpec(),

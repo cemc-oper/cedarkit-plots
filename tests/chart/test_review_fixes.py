@@ -141,7 +141,7 @@ def test_contour_palette_and_explicit_line_colors(palette):
             layer.update(style=style(("red", "blue")))
 
 
-def test_geographic_polar_annotations_match_legacy_after_resize_and_reuse():
+def test_geographic_polar_annotations_follow_template_positions_after_resize_and_reuse():
     template = north_polar(basemap=BasemapSpec(features=(), map_info=None))
     for size in [(8, 8), (12, 6)]:
         with Panel(template=template, layout=LayoutSpec(figsize=size)) as panel:
@@ -154,12 +154,15 @@ def test_geographic_polar_annotations_match_legacy_after_resize_and_reuse():
                 points = []
                 for longitude, annotation in template.chart_defaults.subplots["main"].annotations.items():
                     artist = labels[annotation.text]
-                    lon = float(longitude.removeprefix("longitude_"))
-                    lat = -.5 if annotation.text == "60W" else -4
-                    expected = ax.transData.transform(ax.projection.transform_point(lon, lat, ccrs.Geodetic()))
+                    lon = int(longitude.removeprefix("longitude_"))
+                    assert annotation.position.xy == (lon, 1.5)
+                    assert annotation.position.va == "center"
+                    expected = ax.transData.transform(
+                        ax.projection.transform_point(lon, 1.5, ccrs.Geodetic())
+                    )
                     actual = artist.get_transform().transform(artist.get_position())
                     np.testing.assert_allclose(actual, expected, atol=1e-7)
-                    assert artist.get_va() == ("bottom" if annotation.text == "60W" else "center")
+                    assert artist.get_va() == "center"
                     points.append(actual)
                 assert np.ptp(np.array(points)[:, 1]) > 100
 
