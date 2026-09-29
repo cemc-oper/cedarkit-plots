@@ -64,7 +64,7 @@ source_suffix = {
 nb_render_markdown_format = "myst"
 
 templates_path = ["_templates"]
-exclude_patterns = ["_build", "Thumbs.db", ".DS_Store", "**.ipynb_checkpoints"]
+exclude_patterns = ["Thumbs.db", ".DS_Store", "**.ipynb_checkpoints"]
 
 language = "zh_CN"
 
@@ -118,5 +118,5 @@ html_context = {
     "github_user": "cemc-oper",
     "github_repo": "cedarkit-plots",
     "github_version": "main",
-    "doc_path": "docs",
+    "doc_path": "doc/source",
 }

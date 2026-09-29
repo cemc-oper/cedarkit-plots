@@ -57,9 +57,8 @@ coverage.xml
 *.log
 
 # Sphinx documentation
-docs/_build/
-docs/jupyter_execute/
-docs/api/_autosummary/
+doc/build/
+doc/source/api/_autosummary/
 
 # PyBuilder
 target/
