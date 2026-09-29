@@ -15,13 +15,19 @@ class Domain:
 
     ``map_crs`` and ``boundary`` retain ``UNSET`` until configuration
     resolution, which keeps an omitted field distinct from an explicit
-    override while a Panel is being built incrementally.
+    override while a Panel is being built incrementally. ``boundary_radius``
+    sets a circular boundary's radius as a fraction of the shorter axes side;
+    its default of 0.5 makes the circle touch the axes frame. ``view_padding``
+    expands the projected view by a fraction on each side without changing the
+    declared geographic extent.
     """
 
     extent: tuple[float, float, float, float]
     extent_crs: Any
     map_crs: Any = field(default=UNSET)
     boundary: str = field(default=UNSET)
+    boundary_radius: float = 0.5
+    view_padding: float = 0.0
 
     def __post_init__(self) -> None:
         if isinstance(self.extent, (str, bytes)) or len(self.extent) != 4:
@@ -35,6 +41,18 @@ class Domain:
             _crs(self.map_crs, "map_crs")
         if _is_declared(self.boundary) and self.boundary not in {"extent", "circle", "global"}:
             _fail("Domain.boundary must be extent, circle or global", path=("boundary",))
+        boundary_radius = _check_finite(
+            self.boundary_radius,
+            "boundary_radius",
+            positive=True,
+        )
+        if boundary_radius > 0.5:
+            _fail("Domain.boundary_radius must be at most 0.5", path=("boundary_radius",))
+        object.__setattr__(self, "boundary_radius", boundary_radius)
+        view_padding = _check_finite(self.view_padding, "view_padding", nonnegative=True)
+        if view_padding >= 0.5:
+            _fail("Domain.view_padding must be less than 0.5", path=("view_padding",))
+        object.__setattr__(self, "view_padding", view_padding)
         object.__setattr__(self, "extent_crs", _freeze(self.extent_crs))
         if _is_declared(self.map_crs):
             object.__setattr__(self, "map_crs", _freeze(self.map_crs))
@@ -50,6 +68,8 @@ def resolve_domain(value: Domain) -> Domain:
         extent_crs=value.extent_crs,
         map_crs=None if not _is_declared(value.map_crs) else value.map_crs,
         boundary="extent" if not _is_declared(value.boundary) else value.boundary,
+        boundary_radius=value.boundary_radius,
+        view_padding=value.view_padding,
     )
 
 

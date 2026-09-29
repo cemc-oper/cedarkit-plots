@@ -29,6 +29,7 @@ EUROPE_ASIA_DOMAIN = Domain(
         central_longitude=95,
         standard_parallels=(30, 60),
     ),
+    view_padding=0.035,
 )
 
 GLOBAL_AREA = AreaRange(
@@ -55,6 +56,7 @@ NORTH_POLAR_DOMAIN = Domain(
     extent_crs=ccrs.PlateCarree(),
     map_crs=ccrs.NorthPolarStereo(central_longitude=110),
     boundary="circle",
+    boundary_radius=0.47,
 )
 
 

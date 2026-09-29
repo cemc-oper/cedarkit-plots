@@ -17,6 +17,7 @@ from cedarkit.plots.config import (
     AnnotationSpec,
     AxisSpec,
     BasemapSpec,
+    ColorbarSpec,
     DecorationSpec,
     GridlineSpec,
     LayoutSpec,
@@ -51,28 +52,15 @@ _CN_AREA_POSITION = Rect(space="chart", bounds=(.1, .2, .8, .6))
 _EUROPE_ASIA_POSITION = _EAST_ASIA_POSITION
 _GLOBAL_POSITION = _CN_AREA_POSITION
 _NORTH_POLAR_POSITION = Rect(space="chart", bounds=(.125, .1, .75, .8))
+# Keep each colorbar in a dedicated strip outside the matching map rectangle.
+_EUROPE_ASIA_COLORBAR = Rect(space="chart", bounds=(.895, .24, .025, .52))
+_GLOBAL_COLORBAR = Rect(space="chart", bounds=(.92, .2, .025, .6))
+_NORTH_POLAR_COLORBAR = Rect(space="chart", bounds=(.93, .2, .025, .6))
 _INSET_POSITION = Rect(
     space="subplot",
     subplot="main",
     bounds=(0.0, 0.0, .1 / .75, .14 / .6),
 )
-
-_EUROPE_ASIA_MAP_INFO = MapInfo(
-    x=1.035,
-    y=-.035,
-    text="Scale 1:20000000 No:GS (2019) 1786",
-)
-_GLOBAL_MAP_INFO = MapInfo(
-    x=.998,
-    y=.0022,
-    text="Scale 1:20000000 No:GS (2019) 1786",
-)
-_NORTH_POLAR_MAP_INFO = MapInfo(
-    x=1.065,
-    y=-.045,
-    text="Scale 1:20000000 No:GS (2019) 1786",
-)
-
 
 def _invalid(message: str, name: str) -> None:
     raise ConfigError(message, code="invalid_template", path=(name,))
@@ -129,6 +117,8 @@ def _domain_from_area(
         extent_crs=default.extent_crs,
         map_crs=default.map_crs,
         boundary=default.boundary,
+        boundary_radius=default.boundary_radius,
+        view_padding=default.view_padding,
     )
 
 
@@ -158,7 +148,7 @@ def _global_ticks(interval: float) -> tuple[float, ...]:
     return tuple(float(value) for value in np.unique(ticks))
 
 
-def _china_basemap(map_info: MapInfo, *, with_lakes: bool = True) -> BasemapSpec:
+def _china_basemap(map_info: MapInfo | None, *, with_lakes: bool = True) -> BasemapSpec:
     features = [
         MapFeatureSpec(
             name="coastline",
@@ -216,7 +206,7 @@ def _south_basemap(map_info: MapInfo) -> BasemapSpec:
 
 
 def _global_basemap(
-    map_info: MapInfo,
+    map_info: MapInfo | None,
     *,
     with_global_borders: bool,
 ) -> BasemapSpec:
@@ -263,9 +253,18 @@ def _inset_axis() -> AxisSpec:
     )
 
 
-def _panel_template(chart: ChartTemplate) -> PanelTemplate:
+def _panel_template(
+    chart: ChartTemplate,
+    *,
+    figsize: tuple[float, float] | None = None,
+) -> PanelTemplate:
+    layout = (
+        LayoutSpec(rows=1, columns=1, expected_charts=1)
+        if figsize is None
+        else LayoutSpec(rows=1, columns=1, figsize=figsize, expected_charts=1)
+    )
     return PanelTemplate(
-        layout=LayoutSpec(rows=1, columns=1, expected_charts=1),
+        layout=layout,
         theme=Theme(),
         chart_defaults=chart,
         decorations=DecorationSpec(),
@@ -361,7 +360,7 @@ def europe_asia_chart(
     with_inset = _with_sub_area(with_inset, with_sub_area)
     main_basemap = _require_basemap(main_basemap, "main_basemap")
     sub_basemap = _require_basemap(sub_basemap, "sub_basemap")
-    main_map_info = _require_map_info(main_map_info, "main_map_info") or _EUROPE_ASIA_MAP_INFO
+    main_map_info = _require_map_info(main_map_info, "main_map_info")
     sub_map_info = _require_map_info(sub_map_info, "sub_map_info") or SOUTH_CHINA_SEA_MAP_INFO
     if main_basemap is None:
         main_basemap = _china_basemap(main_map_info)
@@ -394,7 +393,12 @@ def europe_asia_chart(
             axis=_inset_axis(),
             basemap=sub_basemap,
         )
-    return ChartTemplate(subplots=subplots)
+    return ChartTemplate(
+        subplots=subplots,
+        decorations=DecorationSpec(
+            colorbars={"*": ColorbarSpec(position=_EUROPE_ASIA_COLORBAR)},
+        ),
+    )
 
 
 def europe_asia(
@@ -418,7 +422,8 @@ def europe_asia(
             sub_basemap=sub_basemap,
             main_map_info=main_map_info,
             sub_map_info=sub_map_info,
-        )
+        ),
+        figsize=(12.0, 7.8),
     )
 
 
@@ -451,7 +456,7 @@ def _global_chart(
     map_info = _require_map_info(
         main_map_info if main_map_info is not None else map_info,
         "map_info",
-    ) or _GLOBAL_MAP_INFO
+    )
     if basemap is None:
         basemap = _global_basemap(map_info, with_global_borders=with_global_borders)
     ticks_x = _global_ticks(interval)
@@ -477,6 +482,9 @@ def _global_chart(
                 basemap=basemap,
             ),
         },
+        decorations=DecorationSpec(
+            colorbars={"*": ColorbarSpec(position=_GLOBAL_COLORBAR)},
+        ),
     )
 
 
@@ -531,13 +539,13 @@ def global_area_chart(
 def global_map(**kwargs: Any) -> PanelTemplate:
     """Return a one-Chart Panel preset for :func:`global_chart`."""
 
-    return _panel_template(global_chart(**kwargs))
+    return _panel_template(global_chart(**kwargs), figsize=(12.0, 8.0))
 
 
 def global_area(**kwargs: Any) -> PanelTemplate:
     """Return a one-Chart Panel preset for :func:`global_area_chart`."""
 
-    return _panel_template(global_area_chart(**kwargs))
+    return _panel_template(global_area_chart(**kwargs), figsize=(12.0, 8.0))
 
 
 def north_polar_chart(
@@ -568,7 +576,7 @@ def north_polar_chart(
     map_info = _require_map_info(
         main_map_info if main_map_info is not None else map_info,
         "map_info",
-    ) or _NORTH_POLAR_MAP_INFO
+    )
     if basemap is None:
         basemap = _china_basemap(map_info)
 
@@ -577,16 +585,17 @@ def north_polar_chart(
     west_labels = [f"{value}W" for value in range(30, 180, 30)]
     labels_for_longitude = east_labels + west_labels[::-1]
     for longitude, label in zip(range(0, 360, 30), labels_for_longitude):
-        y = -.5 if label == "60W" else -4
         labels[f"longitude_{longitude}"] = AnnotationSpec(
             text=label,
             crs=ccrs.Geodetic(),
             position=TextPosition(
                 space="subplot",
                 subplot="main",
-                xy=(longitude, y),
+                # Latitude 1.5 keeps the labels in the annular margin between
+                # the inset circular boundary and the axes frame.
+                xy=(longitude, 1.5),
                 ha="center",
-                va="bottom" if label == "60W" else "center",
+                va="center",
             ),
             fontsize=8,
         )
@@ -614,13 +623,16 @@ def north_polar_chart(
                 annotations=labels,
             ),
         },
+        decorations=DecorationSpec(
+            colorbars={"*": ColorbarSpec(position=_NORTH_POLAR_COLORBAR)},
+        ),
     )
 
 
 def north_polar(**kwargs: Any) -> PanelTemplate:
     """Return a one-Chart Panel preset for :func:`north_polar_chart`."""
 
-    return _panel_template(north_polar_chart(**kwargs))
+    return _panel_template(north_polar_chart(**kwargs), figsize=(10.0, 8.75))
 
 
 __all__ = [
