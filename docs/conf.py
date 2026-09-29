@@ -93,22 +93,30 @@ intersphinx_mapping = {
 }
 
 
-# -- HTML（sphinx-book-theme） ---------------------------------------------
+# -- HTML（pydata-sphinx-theme） -------------------------------------------
 
-html_theme = "sphinx_book_theme"
+html_theme = "pydata_sphinx_theme"
 html_title = "cedarkit-plots"
 html_static_path = ["_static"]
 
 html_theme_options = {
-    "repository_url": "https://github.com/cemc-oper/cedarkit-plots",
-    "repository_branch": "main",
-    "path_to_docs": "docs",
-    "use_repository_button": True,
-    "use_issues_button": True,
+    "github_url": "https://github.com/cemc-oper/cedarkit-plots",
     "use_edit_page_button": True,
-    "use_download_button": True,
-    "home_page_in_toc": True,
-    "show_navbar_depth": 2,
+    "external_links": [
+        {
+            "name": "Issues",
+            "url": "https://github.com/cemc-oper/cedarkit-plots/issues",
+        },
+    ],
+    "show_nav_level": 2,
+    "navigation_depth": 2,
     "show_toc_level": 2,
     "navigation_with_keys": False,
+}
+
+html_context = {
+    "github_user": "cemc-oper",
+    "github_repo": "cedarkit-plots",
+    "github_version": "main",
+    "doc_path": "docs",
 }

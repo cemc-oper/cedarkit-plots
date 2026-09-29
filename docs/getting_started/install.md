@@ -28,7 +28,7 @@ cedarkit-plots 源码仓库与姊妹包（`reki`、`cedarkit-comp`）
 ```bash
 uv sync                  # 安装运行时依赖
 uv sync --extra test     # 同时安装 pytest + scipy（集成测试需要）
-uv sync --extra docs     # 同时安装 Sphinx + sphinx-book-theme
+uv sync --extra docs     # 同时安装 Sphinx + pydata-sphinx-theme
 ```
 
 ## Cartopy 自然地球数据

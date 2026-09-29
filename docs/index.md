@@ -15,37 +15,23 @@ CEMC/通用样式、风羽、集合 facet、原生色表、地图资源和 v3 wo
 
 ## 从这里开始
 
-- {doc}`getting_started/install`：安装包及 workflow、文档可选依赖。
-- {doc}`getting_started/quick_start`：显式准备单位并绘制 CEMC 温度图。
-- {doc}`getting_started/concepts`：理解内容句柄、展示配置和渲染生命周期。
-- {doc}`tutorials/templates`：直接配置 XY/地图图表、主图/附图和模板切换。
-- {doc}`tutorials/quickplot`：使用单场、向量和 facet 快绘入口。
-- {doc}`tutorials/styles` 与 {doc}`tutorials/colormap`：选择 CEMC/通用样式和原生色表。
-- {doc}`tutorials/recipe_v3`：校验并预览声明式 v3 workflow recipe。
+- {doc}`getting_started/index`：安装、快速上手和核心概念。
+- {doc}`tutorials/index`：绘图配置、快绘入口、样式、色表和 workflow 教程。
 - {doc}`gallery/index`：可运行的产品与展示样例。
-- {doc}`api/index`：公开 Python 接口。
+- {doc}`reference/index`：公开 API 和变更记录。
 
 ```{toctree}
 :hidden:
 :caption: 入门
 
-getting_started/install
-getting_started/quick_start
-getting_started/concepts
+getting_started/index
 ```
 
 ```{toctree}
 :hidden:
 :caption: 教程
 
-tutorials/synthetic_data
-tutorials/templates
-tutorials/quickplot
-tutorials/styles
-tutorials/style_library
-tutorials/colormap
-tutorials/units
-tutorials/recipe_v3
+tutorials/index
 ```
 
 ```{toctree}
@@ -59,6 +45,5 @@ gallery/index
 :hidden:
 :caption: 参考
 
-api/index
-changelog
+reference/index
 ```

@@ -168,9 +168,9 @@ docs = [
     { name = "linkify-it-py" },
     { name = "matplotlib" },
     { name = "myst-nb" },
+    { name = "pydata-sphinx-theme" },
     { name = "sphinx", version = "9.0.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
     { name = "sphinx", version = "9.1.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
-    { name = "sphinx-book-theme" },
     { name = "sphinx-copybutton" },
     { name = "sphinx-design" },
 ]
@@ -198,6 +198,7 @@ requires-dist = [
     { name = "numpy" },
     { name = "pandas" },
     { name = "pydantic", specifier = ">=2" },
+    { name = "pydata-sphinx-theme", marker = "extra == 'docs'", specifier = ">=0.15" },
     { name = "pytest", marker = "extra == 'test'" },
     { name = "pytest-cov", marker = "extra == 'cov'" },
     { name = "pyyaml" },
@@ -205,7 +206,6 @@ requires-dist = [
     { name = "reki", marker = "extra == 'workflow'", editable = "../reki" },
     { name = "scipy", marker = "extra == 'test'" },
     { name = "sphinx", marker = "extra == 'docs'", specifier = ">=7.3" },
-    { name = "sphinx-book-theme", marker = "extra == 'docs'", specifier = ">=1.1" },
     { name = "sphinx-copybutton", marker = "extra == 'docs'", specifier = ">=0.5" },
     { name = "sphinx-design", marker = "extra == 'docs'", specifier = ">=0.6" },
     { name = "xarray" },
@@ -2601,20 +2601,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/cd/bd/f08eb0f4eed5c83f1ba2a3bd18f7745a2b1525fad70660a1c00224ec468a/sphinx-9.1.0.tar.gz", hash = "sha256:7741722357dd75f8190766926071fed3bdc211c74dd2d7d4df5404da95930ddb", size = 8718324, upload-time = "2025-12-31T15:09:27.646Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/73/f7/b1884cb3188ab181fc81fa00c266699dab600f927a964df02ec3d5d1916a/sphinx-9.1.0-py3-none-any.whl", hash = "sha256:c84fdd4e782504495fe4f2c0b3413d6c2bf388589bb352d439b2a3bb99991978", size = 3921742, upload-time = "2025-12-31T15:09:25.561Z" },
-]
-
-[[package]]
-name = "sphinx-book-theme"
-version = "1.4.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "pydata-sphinx-theme" },
-    { name = "sphinx", version = "9.0.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
-    { name = "sphinx", version = "9.1.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/e9/8a/cb008736682b3974cae6925c54939792fe56f5a167e37984cb45d8a85d8a/sphinx_book_theme-1.4.0.tar.gz", hash = "sha256:fee3cd70573d9a8cd4ab380a3cb1f11139c24dcaa2cf47d06d7f924f1b44eaff", size = 406113, upload-time = "2026-07-19T21:23:54.183Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/00/5e/6c41ee74f0a4caef53f224c3e6c3869b577dade1a283767bdc874f11e51c/sphinx_book_theme-1.4.0-py3-none-any.whl", hash = "sha256:10fd57d667ee0b565928c3ce95562e281c5d1b94bd5a2aafc5cd41a5d498dcd0", size = 458862, upload-time = "2026-07-19T21:23:52.852Z" },
 ]
 
 [[package]]
