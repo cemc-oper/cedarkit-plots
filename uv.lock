@@ -176,12 +176,14 @@ docs = [
 ]
 test = [
     { name = "cedarkit-comp" },
+    { name = "cedarkit-query" },
     { name = "pytest" },
     { name = "reki" },
     { name = "scipy" },
 ]
 workflow = [
     { name = "cedarkit-comp" },
+    { name = "cedarkit-query" },
     { name = "reki" },
 ]
 
@@ -190,6 +192,8 @@ requires-dist = [
     { name = "cartopy", specifier = ">=0.23.0" },
     { name = "cedarkit-comp", marker = "extra == 'test'", editable = "../cedarkit-comp" },
     { name = "cedarkit-comp", marker = "extra == 'workflow'", editable = "../cedarkit-comp" },
+    { name = "cedarkit-query", marker = "extra == 'test'", directory = "../cedarkit-query" },
+    { name = "cedarkit-query", marker = "extra == 'workflow'", directory = "../cedarkit-query" },
     { name = "ipykernel", marker = "extra == 'docs'", specifier = ">=6.29" },
     { name = "linkify-it-py", marker = "extra == 'docs'", specifier = ">=2.0" },
     { name = "matplotlib" },
@@ -211,6 +215,24 @@ requires-dist = [
     { name = "xarray" },
 ]
 provides-extras = ["workflow", "test", "cov", "docs"]
+
+[[package]]
+name = "cedarkit-query"
+version = "0.1.0"
+source = { directory = "../cedarkit-query" }
+dependencies = [
+    { name = "jsonschema" },
+    { name = "pyyaml" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "jsonschema", specifier = ">=4.20" },
+    { name = "pyyaml", specifier = ">=6" },
+]
+
+[package.metadata.requires-dev]
+test = [{ name = "pytest", specifier = ">=8" }]
 
 [[package]]
 name = "certifi"
@@ -2159,6 +2181,7 @@ wheels = [
 name = "reki"
 source = { editable = "../reki" }
 dependencies = [
+    { name = "cedarkit-query" },
     { name = "cfgrib" },
     { name = "click" },
     { name = "eccodes" },
@@ -2169,12 +2192,14 @@ dependencies = [
     { name = "pandas" },
     { name = "pyyaml" },
     { name = "requests" },
+    { name = "scipy" },
     { name = "tqdm" },
     { name = "xarray" },
 ]
 
 [package.metadata]
 requires-dist = [
+    { name = "cedarkit-query", directory = "../cedarkit-query" },
     { name = "cfgrib" },
     { name = "click" },
     { name = "dask", marker = "extra == 'lazy'" },
@@ -2188,6 +2213,7 @@ requires-dist = [
     { name = "pandas" },
     { name = "pyyaml" },
     { name = "requests" },
+    { name = "scipy" },
     { name = "tqdm" },
     { name = "xarray" },
 ]

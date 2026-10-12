@@ -7,7 +7,10 @@ from types import MappingProxyType
 from typing import Any, Mapping
 import json
 
+import pandas as pd
+from cedarkit_query import QueryError, Request, normalize_request
 from reki import FieldQuery
+from reki.query_adapter import query_from_field_query
 
 from ..recipe.schema import Content, Display
 
@@ -45,6 +48,33 @@ class BoundFieldRequest:
     node_id: str
     key: FieldRequest
     origin: str
+
+
+def public_request_from_field_request(
+    value: FieldRequest | BoundFieldRequest, *, dataset: str,
+    native_parameter: str | None = None, member_roles: Mapping[str, str] | None = None,
+) -> Request:
+    """Map one workflow read to a canonical public request, leaving node IDs outside it."""
+    key = value.key if isinstance(value, BoundFieldRequest) else value
+    if not isinstance(key, FieldRequest):
+        raise TypeError("value must be a FieldRequest or BoundFieldRequest")
+    if key.start_time is None or key.forecast_time is None:
+        raise QueryError("invalid_query", "/query", "public workflow reads need explicit times")
+    try:
+        lead = pd.Timedelta(key.forecast_time)
+    except (TypeError, ValueError):
+        lead = pd.Timestamp(key.forecast_time) - pd.Timestamp(key.start_time)
+    query = query_from_field_query(dataset, key.query, key.parameter_id,
+                                   key.start_time, lead, native_parameter=native_parameter,
+                                   member_roles=member_roles)
+    if key.cardinality == "one":
+        policy = {"cardinality": "one"}
+    elif key.cardinality == "all":
+        policy = {"cardinality": "zero_or_one", "missing": "partial"}
+    else:
+        raise QueryError("unsupported", "/policy/cardinality", "workflow first cardinality has no public mapping")
+    return normalize_request(Request({"api_version": "cedarkit.request/v1", "action": "read",
+                                      "query": query.to_dict(), "policy": policy})).normalized_request
 
 
 @dataclass(frozen=True)
