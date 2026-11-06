@@ -16,3 +16,13 @@ styles:
     flagcolor: black
     linewidth: 0.3
     expected_units: m/s
+  # Physical m/s inputs: the display encoding is independent of field values.
+  cn_mps:
+    type: barb
+    length: 4
+    pivot: middle
+    barbcolor: black
+    flagcolor: black
+    linewidth: 0.3
+    barb_increments: {half: 2, full: 4, flag: 20}
+    expected_units: m/s

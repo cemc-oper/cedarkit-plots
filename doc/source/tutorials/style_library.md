@@ -11,7 +11,7 @@ cedarkit-plots 的要素样式库把"某个气象要素该怎么画"（色标、
 匹配与构建。本文介绍样式文件的结构与编写方法。
 
 ```{note}
-业务色标已内置在 `style/builtin/cemc/`：20 个 ID、37 个变体，
+业务色标已内置在 `style/builtin/cemc/`：20 个 ID、38 个变体，
 无需安装 cedar-graph。通用样式位于 `style/builtin/generic/`。
 默认 profile 为 cemc，通用样式通过 `generic.t` 显式选择。
 ```
@@ -138,6 +138,19 @@ highlight:
 显式转换使用 [数据准备接口](./units.md)，返回新数组与转换记录。
 CEMC 全部变体已声明单位；降水变体还声明累计时段，`get_style` 必须收到对应 metadata/data。
 旧 `units/get_transform/style_units` 隐式转换路径已随 D13-07 删除。
+
+### 物理风场与风羽编码
+
+`cemc.wind:cn_mps` 接收保持原值的 `m/s` 风分量，显式声明
+`barb_increments: {half: 2, full: 4, flag: 20}`。半羽、全羽、旗分别表示
+2、4、20 m/s；该约定沿用项目已冻结的 CEMC 样式契约。物理风分量和由它们
+计算的风速不乘展示倍率，风羽抽稀仅影响绘制采样。
+
+这些增量直接关联传给 Matplotlib 的向量值；默认按最近的半羽增量舍入，
+具体规则见 [Matplotlib barbs](https://matplotlib.org/stable/api/_as_gen/matplotlib.pyplot.barbs.html)。
+Matplotlib 自身的缺省增量为 5／10／50，而 CedarKit 的 `BarbStyle`
+既有默认已是 2／4／20，因此不能把未显式填写增量的样式当作 Matplotlib 缺省。
+本变体把产品依赖的物理编码写入资源，既有 `cn` 变体及其他产品不自动切换。
 
 ## profile 加载与优先级
 

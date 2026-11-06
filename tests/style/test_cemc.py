@@ -47,7 +47,7 @@ def field(style):
 
 def test_complete_catalog(registry):
     assert registry.style_ids == sorted(IDS)
-    assert sum(len(registry._lookup(i)[1].styles) for i in IDS) == 37
+    assert sum(len(registry._lookup(i)[1].styles) for i in IDS) == 38
     assert registry.get_style('generic.t').levels.step == 4
     wind = registry.get_style('wind')
     assert isinstance(wind, BarbStyle)

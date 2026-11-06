@@ -13,7 +13,7 @@ kernelspec:
 
 # 样式（Style）
 
-CEMC 的 20 个样式、37 个变体已内置，无需安装 cedar-graph。
+CEMC 的 20 个样式、38 个变体已内置，无需安装 cedar-graph。
 等级、标签、高亮和风羽参数由样式声明；产品负责选择变体和组合图层。
 通用样式位于 `generic` profile，需由调用方显式选择。温度数据应先准备为 degC，样式不转换数据。
 
