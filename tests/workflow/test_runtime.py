@@ -134,7 +134,8 @@ def test_scale_smooth_and_wind_speed_compute_use_registered_algorithms():
 def test_unit_mismatch_fails_with_node_product_trace_and_no_source_mutation():
     source = array(273.15, "degC")
     plan = compile_recipe(recipe({"result": {"field": {"parameter": "cedarkit.t2m"},
-                                               "units": "degC", "temperature_kind": "absolute"}}))
+                                               "units": "degC", "source_units": "K",
+                                               "temperature_kind": "absolute"}}))
     with pytest.raises(PlanExecutionError, match="product=test.runtime.*operation failed") as caught:
         plan.execute(Provider({"cedarkit.t2m": source}))
     error = caught.value

@@ -18,6 +18,11 @@ def registry():
     return OpRegistry((OpDescriptor("add", "compute", 2, 1, lambda a, b: a + b),))
 
 
+def parameters():
+    return {"cedarkit.t2m": {"name": "t2m", "unit": "K", "fixed_conditions": {
+        "level_type": "height_above_ground", "level": 2, "level_unit": "m"}}}
+
+
 def test_static_dag_is_stable_and_deduplicates_reads():
     declarations = {
         "result": {"compute": {"op": "add", "inputs": ["left", "right"]}},
@@ -78,7 +83,7 @@ def test_cycle_and_unknown_field_include_product_and_binding():
 
     missing = recipe({"result": {"field": {"parameter": "not.a.parameter"}}})
     with pytest.raises(RecipeCompileError, match="test.product.*cannot resolve field") as caught:
-        compile_recipe(missing)
+        compile_recipe(missing, CompileContext(parameters=parameters()))
     assert caught.value.binding == "result"
     assert caught.value.code == "field_query"
 
@@ -125,19 +130,58 @@ def test_distinct_requests_at_one_time_share_batch_and_bad_op_has_context():
     assert caught.value.code == "unknown_op"
 
 
-@pytest.mark.parametrize("parameter,level,expected_type,expected_level", (
-    ("cedarkit.h", {"first_level_type": 100, "first_level": 500}, "isobaricInhPa", 500),
-    ("cedarkit.u", {"first_level_type": 103, "first_level": 10}, "heightAboveGround", 10),
+@pytest.mark.parametrize("parameter,level,expected", (
+    ("cedarkit.h", {"first_level_type": 100, "first_level": 500},
+     {"level_type": "pressure", "level": 500, "level_unit": "hPa"}),
+    ("cedarkit.u", {"first_level_type": 103, "first_level": 10},
+     {"level_type": "height_above_ground", "level": 10, "level_unit": "m"}),
     ("cedarkit.shr", {"first_level_type": 103, "first_level": 3000,
-                      "second_level_type": 103, "second_level": 0}, "heightAboveGroundLayer", 3000),
+                      "second_level_type": 103, "second_level": 0},
+     {"layer": {"bottom": {"type": "height_above_ground", "value": 0, "unit": "m"},
+                "top": {"type": "height_above_ground", "value": 3000, "unit": "m"}}}),
 ))
-def test_catalog_surface_levels_bind_to_searchable_query(parameter, level, expected_type, expected_level):
+def test_recipe_surface_levels_bind_to_current_query(parameter, level, expected):
     plan = compile_recipe(recipe({"result": {"field": {"parameter": parameter, "level": level}}}))
     query = next(node.request.query for node in plan.nodes if node.request)
-    assert query.level_type == expected_type
-    assert query.level == expected_level
-    assert "first_level" not in query.extra
-    assert "second_level" not in query.extra
+    assert query.to_dict() == {"parameter": parameter, **expected}
+
+
+def test_explicit_parameters_bind_alias_and_fixed_conditions_without_global_catalog():
+    plan = compile_recipe(recipe({"result": {"field": {"parameter": "t2m"},
+                                             "units": "degC", "temperature_kind": "absolute"}}),
+                          CompileContext(parameters=parameters()))
+    query = next(node.request.query for node in plan.nodes if node.request)
+    assert query.to_dict() == {"parameter": "cedarkit.t2m", "level_type": "height_above_ground",
+                               "level": 2, "level_unit": "m"}
+    assert dict(plan.nodes[-1].kwargs)["source_units"] == "K"
+    with pytest.raises(RecipeCompileError, match="cannot resolve field"):
+        compile_recipe(recipe({"result": {"field": {"parameter": "cedarkit.t2m", "level": {"level": 10}}}}),
+                       CompileContext(parameters=parameters()))
+    with pytest.raises(RecipeCompileError, match="contradict catalog units"):
+        compile_recipe(recipe({"result": {"field": {"parameter": "cedarkit.t2m"}, "source_units": "degC"}}),
+                       CompileContext(parameters=parameters()))
+
+
+def test_unbound_parameter_is_deferred_and_members_use_public_primitives():
+    plan = compile_recipe(recipe({"result": {"field": {"parameter": "local.temperature",
+                                                        "level": {"member": "m03"}}}}))
+    assert plan.nodes[0].request.query.to_dict() == {"parameter": "local.temperature", "member": 3}
+    control = compile_recipe(recipe({"result": {"field": {"parameter": "local.temperature",
+                                                           "level": {"member": "ctl"}}}}))
+    assert control.nodes[0].request.query.member_role == "control"
+
+
+def test_bound_context_exposes_valid_time_for_duration_and_timestamp_forecasts():
+    for forecast in ("PT24H", "2026-01-02T00:00Z"):
+        plan = compile_recipe(recipe({"result": {"field": {"parameter": "local.temperature"}}}),
+                              CompileContext(start_time="2026-01-01T00:00Z", forecast_time=forecast))
+        assert plan.context["valid_time"] == "2026-01-02T00:00:00Z"
+        assert plan.context["forecast_hour"] == "024"
+        assert plan.context["start_time_label"] == "2026010100 UTC"
+        assert plan.context["valid_time_label"] == "2026010200 UTC"
+    precise = compile_recipe(recipe({"result": {"field": {"parameter": "local.temperature"}}}),
+        CompileContext(start_time="2026-01-01T00:30:01.123Z", forecast_time="6h"))
+    assert precise.context["valid_time_label"] == "20260101063001.123 UTC"
 
 
 def test_multi_output_slots_are_stable():

@@ -8,9 +8,7 @@ from typing import Any, Mapping
 import json
 
 import pandas as pd
-from cedarkit_query import QueryError, Request, normalize_request
-from reki import FieldQuery
-from reki.query_adapter import query_from_field_query
+from cedarkit_query import Query, QueryError, Request, constrain_query
 
 from ..recipe.schema import Content, Display
 
@@ -37,7 +35,7 @@ class PlanIssue:
 class FieldRequest:
     provider_slot: str
     parameter_id: str
-    query: FieldQuery
+    query: Query
     start_time: str | None
     forecast_time: str | None
     cardinality: str
@@ -51,30 +49,29 @@ class BoundFieldRequest:
 
 
 def public_request_from_field_request(
-    value: FieldRequest | BoundFieldRequest, *, dataset: str,
-    native_parameter: str | None = None, member_roles: Mapping[str, str] | None = None,
+    value: FieldRequest | BoundFieldRequest, *, source: Mapping[str, Any],
+    context: Mapping[str, Any] | str | None = None, completeness: str = "available",
 ) -> Request:
-    """Map one workflow read to a canonical public request, leaving node IDs outside it."""
+    """Bind workflow times into a public request; execution cardinality stays outside it."""
     key = value.key if isinstance(value, BoundFieldRequest) else value
     if not isinstance(key, FieldRequest):
         raise TypeError("value must be a FieldRequest or BoundFieldRequest")
     if key.start_time is None or key.forecast_time is None:
-        raise QueryError("invalid_query", "/query", "public workflow reads need explicit times")
+        raise QueryError("invalid_query", "/queries/0", "public workflow reads need explicit times")
     try:
-        lead = pd.Timedelta(key.forecast_time)
-    except (TypeError, ValueError):
-        lead = pd.Timestamp(key.forecast_time) - pd.Timestamp(key.start_time)
-    query = query_from_field_query(dataset, key.query, key.parameter_id,
-                                   key.start_time, lead, native_parameter=native_parameter,
-                                   member_roles=member_roles)
-    if key.cardinality == "one":
-        policy = {"cardinality": "one"}
-    elif key.cardinality == "all":
-        policy = {"cardinality": "zero_or_one", "missing": "partial"}
-    else:
-        raise QueryError("unsupported", "/policy/cardinality", "workflow first cardinality has no public mapping")
-    return normalize_request(Request({"api_version": "cedarkit.request/v1", "action": "read",
-                                      "query": query.to_dict(), "policy": policy})).normalized_request
+        try:
+            lead = pd.Timedelta(key.forecast_time)
+        except (TypeError, ValueError):
+            lead = pd.Timestamp(key.forecast_time) - pd.Timestamp(key.start_time)
+    except (TypeError, ValueError) as exc:
+        raise QueryError("invalid_query", "/queries/0/time", "invalid workflow time binding") from exc
+    query = constrain_query(key.query, {"parameter": key.parameter_id, "time": key.start_time,
+                                       "step": lead.isoformat()})
+    payload = {"api_version": "cedarkit.request/v1", "source": dict(source),
+               "queries": [query.to_dict()], "completeness": completeness}
+    if context is not None:
+        payload["context"] = dict(context) if isinstance(context, Mapping) else context
+    return Request.from_dict(payload)
 
 
 @dataclass(frozen=True)
@@ -171,8 +168,7 @@ class WorkflowPlan:
                     "provider_slot": request.provider_slot, "parameter_id": request.parameter_id,
                     "start_time": request.start_time, "forecast_time": request.forecast_time,
                     "cardinality": request.cardinality,
-                    "query": value({key: getattr(query, key) for key in (
-                        "parameter", "level_type", "level", "step_type", "time_range", "member", "extra")})}
+                    "query": value(query.to_dict())}
             nodes.append(entry)
         return {"plan_schema_version": 3, "recipe": {"identity": self.recipe_identity,
                 "api_version": self.recipe_version}, "compiler_version": self.compiler_version,

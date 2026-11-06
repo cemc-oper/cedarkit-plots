@@ -218,7 +218,7 @@ provides-extras = ["workflow", "test", "cov", "docs"]
 
 [[package]]
 name = "cedarkit-query"
-version = "0.1.0"
+version = "0.2.1"
 source = { directory = "../cedarkit-query" }
 dependencies = [
     { name = "jsonschema" },

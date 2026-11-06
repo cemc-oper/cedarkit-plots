@@ -9,7 +9,7 @@ from dataclasses import dataclass, replace
 from typing import Any, Mapping
 
 import pandas as pd
-from reki import resolve_parameter
+from cedarkit_query import Query, normalize_query, prepare_queries
 
 from ...ops import OpRegistry
 from ...units import canonical_unit, conversion_rule
@@ -17,34 +17,62 @@ from ..metadata import format_value
 from ..recipe import LoadedRecipe, Recipe
 from .model import FieldRequest, PlanIssue, PlanNode, RecipeCompileError, WorkflowPlan
 
-_QUERY_FIELDS = {"level_type", "level", "step_type", "time_range", "member"}
-_FIRST_SURFACE_TYPES = {100: "isobaricInhPa", 103: "heightAboveGround"}
+_QUERY_FIELDS = {"level_type", "level", "level_unit", "layer", "member", "member_role",
+                 "time", "step", "valid_time", "native"}
+_FIRST_SURFACE_TYPES = {100: ("pressure", "hPa"), 103: ("height_above_ground", "m")}
 
 
 def _normalize_field_level(level: Mapping[str, Any]) -> dict[str, Any]:
-    """Bind catalog surface selectors to searchable reki query fields."""
+    """Adapt recipe surface declarations to current semantic query primitives."""
     result = dict(level)
     first = result.pop("first_level", None)
     first_type = result.pop("first_level_type", None)
     second = result.pop("second_level", None)
     second_type = result.pop("second_level_type", None)
-    if first is not None:
+    if first is not None and second is None:
         if "level" in result and result["level"] != first:
             raise ValueError("level and first_level disagree")
         result["level"] = first
     if first_type is not None:
-        result["typeOfFirstFixedSurface"] = first_type
         inferred = _FIRST_SURFACE_TYPES.get(int(first_type))
         if inferred is not None:
-            if second is not None and int(first_type) == 103:
-                inferred = "heightAboveGroundLayer"
-            if "level_type" in result and result["level_type"] != inferred:
+            kind, unit = inferred
+            if "level_type" in result and result["level_type"] != kind:
                 raise ValueError("level_type and first_level_type disagree")
-            result["level_type"] = inferred
-    if second_type is not None:
-        result["typeOfSecondFixedSurface"] = second_type
-    if second is not None:
-        result["scaledValueOfSecondFixedSurface"] = second
+            if second is None:
+                result["level_type"] = kind
+                result.setdefault("level_unit", unit)
+            else:
+                if first is None or second_type is None or int(second_type) != int(first_type):
+                    raise ValueError("layer needs two surfaces of the same supported type")
+                low, high = sorted((first, second))
+                bottom, top = (high, low) if kind == "pressure" else (low, high)
+                result["layer"] = {"bottom": {"type": kind, "value": bottom, "unit": unit},
+                                   "top": {"type": kind, "value": top, "unit": unit}}
+        else:
+            raise ValueError(f"unsupported first_level_type {first_type!r}; use native.grib for encoded selectors")
+    elif second is not None or second_type is not None:
+        raise ValueError("second surface requires first_level_type")
+    if "step_type" in result or "time_range" in result:
+        raise ValueError("step_type/time_range need a parameter variant with statistical fixed conditions")
+    member = result.get("member")
+    if isinstance(member, str):
+        if re.fullmatch(r"m?\d+", member):
+            result["member"] = int(member.removeprefix("m"))
+        elif member.lower() in {"ctl", "control"}:
+            result.pop("member")
+            if result.get("member_role", "control") != "control":
+                raise ValueError("member and member_role disagree")
+            result["member_role"] = "control"
+    extra = {key: result.pop(key) for key in tuple(result) if key not in _QUERY_FIELDS}
+    if extra:
+        native = dict(result.get("native", {}))
+        grib = dict(native.get("grib", {}))
+        for key, value in extra.items():
+            if key in grib and grib[key] != value:
+                raise ValueError(f"native selector {key!r} disagrees")
+            grib[key] = value
+        result["native"] = {**native, "grib": grib}
     return result
 
 
@@ -65,14 +93,34 @@ def _stable_id(kind: str, payload: Any) -> str:
     return f"{kind}:{hashlib.sha256(encoded).hexdigest()[:16]}"
 
 
+def _is_duration(value: Any) -> bool:
+    return isinstance(value, pd.Timedelta) or (isinstance(value, str) and (
+        value.startswith("P") or re.fullmatch(r"[+-]?\d+(?:\.\d+)?[A-Za-z]+", value) is not None))
+
+
 def _time(value: Any) -> str | None:
     if value is None:
         return None
-    if isinstance(value, pd.Timedelta) or (isinstance(value, str) and re.fullmatch(r"[+-]?\d+(?:\.\d+)?[A-Za-z]+", value)):
+    if _is_duration(value):
         return pd.Timedelta(value).isoformat()
     stamp = pd.Timestamp(value)
     stamp = stamp.tz_localize("UTC") if stamp.tzinfo is None else stamp.tz_convert("UTC")
     return stamp.isoformat().replace("+00:00", "Z")
+
+
+def _time_label(value: Any) -> str | None:
+    if value is None:
+        return None
+    stamp = pd.Timestamp(_time(value))
+    precision = "%Y%m%d%H"
+    if stamp.minute or stamp.second or stamp.microsecond or stamp.nanosecond:
+        precision += "%M"
+    if stamp.second or stamp.microsecond or stamp.nanosecond:
+        precision += "%S"
+    label = stamp.strftime(precision)
+    if stamp.microsecond or stamp.nanosecond:
+        label += "." + f"{stamp.microsecond * 1000 + stamp.nanosecond:09d}".rstrip("0")
+    return label + " UTC"
 
 
 @dataclass(frozen=True)
@@ -83,11 +131,14 @@ class CompileContext:
     provider_slot: str = "default"
     cardinality: str = "one"
     strict: bool = False
+    parameters: Mapping[str, Any] | None = None
 
     def __post_init__(self) -> None:
         if not self.provider_slot or self.cardinality not in {"one", "first", "all"}:
             raise ValueError("invalid provider_slot or cardinality")
         object.__setattr__(self, "params", dict(self.params or {}))
+        if self.parameters is not None:
+            object.__setattr__(self, "parameters", dict(self.parameters))
 
 
 class _Compiler:
@@ -147,17 +198,24 @@ class _Compiler:
 
     def _context_values(self) -> dict[str, Any]:
         values = {"start_time": _time(self.context.start_time), "forecast_time": _time(self.context.forecast_time),
+                  "valid_time": None, "forecast_hour": None, "previous_forecast_hour": None,
+                  "start_time_label": _time_label(self.context.start_time), "valid_time_label": None,
                   "provider_slot": self.context.provider_slot, "cardinality": self.context.cardinality}
         if self.context.forecast_time is not None:
-            try:
+            forecast = None
+            if _is_duration(self.context.forecast_time):
                 forecast = pd.Timedelta(self.context.forecast_time)
-            except (TypeError, ValueError):
-                pass
-            else:
+                if self.context.start_time is not None:
+                    values["valid_time"] = _time(pd.Timestamp(self.context.start_time) + forecast)
+            elif self.context.start_time is not None:
+                forecast = pd.Timestamp(self.context.forecast_time) - pd.Timestamp(self.context.start_time)
+                values["valid_time"] = _time(self.context.forecast_time)
+            if forecast is not None:
                 values["forecast_hour"] = f"{int(forecast / pd.Timedelta(hours=1)):03d}"
                 if self.params.get("interval") is not None:
                     previous = forecast - pd.Timedelta(self.params["interval"])
                     values["previous_forecast_hour"] = f"{int(previous / pd.Timedelta(hours=1)):03d}"
+        values["valid_time_label"] = _time_label(values["valid_time"])
         return values
 
     def _content(self):
@@ -192,21 +250,18 @@ class _Compiler:
             expanded = _normalize_field_level(self.expand(level, origin))
         except (TypeError, ValueError) as exc:
             raise self.error(f"invalid field level at {origin}: {exc}", "field_query", binding=binding) from exc
-        extra = {key: value for key, value in expanded.items() if key not in _QUERY_FIELDS}
-        standard = {key: value for key, value in expanded.items() if key in _QUERY_FIELDS}
         try:
-            resolved = resolve_parameter(parameter, extra=extra or None, **standard)
+            query = Query({"parameter": parameter, **expanded})
+            query = (prepare_queries((query,), self.context.parameters)[0]
+                     if self.context.parameters is not None else normalize_query(query))
         except Exception as exc:
             raise self.error(f"cannot resolve field {parameter!r} at {origin}: {exc}", "field_query", binding=binding) from exc
-        parameter_id = resolved.record.parameter_id
-        if not parameter_id:
-            raise self.error(f"field {parameter!r} has no stable parameter ID", "parameter_id", binding=binding)
-        key = FieldRequest(self.context.provider_slot, parameter_id, resolved.query,
+        parameter_id = query.parameter
+        key = FieldRequest(self.context.provider_slot, parameter_id, query,
                            _time(self.context.start_time), forecast_time if forecast_time is not None else _time(self.context.forecast_time),
                            self.context.cardinality)
-        query = resolved.query
         payload = {"slot": key.provider_slot, "parameter": key.parameter_id,
-                   "query": {field: getattr(query, field) for field in ("parameter", "level_type", "level", "step_type", "time_range", "member", "extra")},
+                   "query": query.to_dict(),
                    "start": key.start_time, "forecast": key.forecast_time, "cardinality": key.cardinality}
         node_id = _stable_id("read", payload)
         if node_id in self.nodes:
@@ -275,8 +330,7 @@ class _Compiler:
                     try:
                         interval = pd.Timedelta(args[0])
                         raw_forecast = self.context.forecast_time
-                        duration = isinstance(raw_forecast, pd.Timedelta) or (
-                            isinstance(raw_forecast, str) and re.fullmatch(r"[+-]?\d+(?:\.\d+)?[A-Za-z]+", raw_forecast))
+                        duration = _is_duration(raw_forecast)
                         forecast = pd.Timedelta(raw_forecast) if duration else pd.Timestamp(raw_forecast)
                     except (TypeError, ValueError) as exc:
                         raise self.error(f"time_diff needs forecast time and interval: {exc}", "planner", binding=name) from exc
@@ -288,10 +342,8 @@ class _Compiler:
                     if ancestor is None or ancestor.request is None:
                         raise self.error("time_diff needs a field read ancestor", "planner", binding=name)
                     request = ancestor.request
-                    query = request.query
-                    previous_level = {field: getattr(query, field) for field in _QUERY_FIELDS
-                                      if getattr(query, field) is not None}
-                    previous_level.update(query.extra)
+                    previous_level = request.query.to_dict()
+                    previous_level.pop("parameter")
                     previous = self.read(request.parameter_id, previous_level, f"{name}@-{interval}", origin + f".transforms.{index}.planner",
                                          forecast_time=_time(forecast - interval))
                     dependencies = (current, previous)
@@ -310,7 +362,10 @@ class _Compiler:
             try:
                 target = canonical_unit(item.units) if item.units is not None else None
                 declared_source = item.source_units
-                catalog_source = resolve_parameter(item.field.parameter).record.unit if item.field and not item.transforms else None
+                catalog_source = None
+                if item.field and not item.transforms and self.context.parameters is not None:
+                    request = self.nodes[current].request
+                    catalog_source = self.context.parameters[request.parameter_id].get("unit")
                 if declared_source is not None and catalog_source is not None and canonical_unit(declared_source) != canonical_unit(catalog_source):
                     raise ValueError(f"source_units {declared_source!r} contradict catalog units {catalog_source!r}")
                 if declared_source is None and item.field and not item.transforms:
