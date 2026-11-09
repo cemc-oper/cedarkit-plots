@@ -180,3 +180,70 @@ def test_source_units_without_target_is_a_real_validation_node():
     result = plan.execute(Provider({"cedarkit.psl": source}))
     assert result.outputs["result"].attrs["units"] == "Pa"
     assert source.attrs == {}
+
+
+def cumulative_endpoint(hour, value, *, error=0.0, origin="2026-11-02T12:00:00Z"):
+    import json
+    import pandas as pd
+    start = pd.Timestamp(origin)
+    end = start + pd.Timedelta(hours=hour)
+    a = array(value, "mm").assign_coords(time=start.tz_localize(None), step=np.timedelta64(hour, "h"), valid_time=end.tz_localize(None))
+    identity = {"parameter": "cedarkit.rain.since-initialization", "time": start.isoformat(),
+                "step": pd.Timedelta(hours=hour).isoformat(), "valid_time": end.isoformat(), "level_type": "surface"}
+    a.attrs.update(field_identity=json.dumps(identity), statistical_interval=json.dumps({"start": start.isoformat(), "end": end.isoformat()}),
+                   value_encoding=json.dumps({"quantization_error": error, "unit": "mm"}),
+                   source_reference=json.dumps({"hour": hour}), cedarkit_query_report=json.dumps({"overall": {"status": "unchecked"}}))
+    return a
+
+
+def test_reviewed_accumulation_retains_small_negatives_and_input_reports():
+    import json
+    from cedarkit.plots.ops.builtin import time_diff
+    current = cumulative_endpoint(48, 3.0 - 0.000032, error=0.000032)
+    previous = cumulative_endpoint(24, 3.0, error=0.000016)
+    current.values[0, 1] = np.nan
+    result = time_diff(current, previous, accumulation_hours=24.0, since_initialization=True)
+    np.testing.assert_array_equal(result.values, current.values - previous.values)
+    assert result.attrs["negative_difference_points"] == 3
+    assert result.attrs["negative_difference_bound"] == pytest.approx(0.000048)
+    assert result.attrs["accumulation_start"].startswith("2026-11-03T12:00:00")
+    assert result.step == current.step
+    assert "field_identity" not in result.attrs and "cedarkit_query_report" not in result.attrs
+    assert len(json.loads(result.attrs["source_query_reports"])) == 2
+    assert previous.values[0, 0] == 3.0
+
+
+@pytest.mark.parametrize("case", ["reset", "cycle", "grid", "initialization", "decrease", "unknown_precision"])
+def test_reviewed_accumulation_refuses_inconsistent_endpoints(case):
+    import json
+    from cedarkit.plots.ops.builtin import time_diff
+    current = cumulative_endpoint(48, 10.0)
+    previous = cumulative_endpoint(24, 3.0)
+    if case == "reset":
+        current.attrs["statistical_interval"] = json.dumps({"start": "2026-11-03T12:00:00Z", "end": "2026-11-04T12:00:00Z"})
+    elif case == "cycle":
+        previous = cumulative_endpoint(24, 3.0, origin="2026-11-03T12:00:00Z")
+    elif case == "grid":
+        previous = previous.assign_coords(x=[1, 2])
+    elif case == "initialization":
+        previous = cumulative_endpoint(0, 1.0)
+        current = cumulative_endpoint(24, 10.0)
+    elif case == "decrease":
+        current.values[:] = 1.0
+    else:
+        del previous.attrs["value_encoding"]
+    with pytest.raises(ValueError):
+        time_diff(current, previous, accumulation_hours=24.0, since_initialization=True)
+
+
+def test_reviewed_accumulation_rejects_before_render_with_transform_location():
+    plan = compile_recipe(recipe({"result": {"field": {"parameter": "cedarkit.rain.since-initialization"},
+        "transforms": [{"op": "time_diff", "args": ["24h"], "kwargs": {"since_initialization": True}}]}}),
+        CompileContext(start_time="2026-11-02T12:00:00Z", forecast_time="48h"))
+    class Endpoints:
+        def fetch_many(self, requests):
+            return [cumulative_endpoint(48, 1.0) if "P2D" in r.key.forecast_time else cumulative_endpoint(24, 3.0) for r in requests]
+    with pytest.raises(PlanExecutionError, match="decreased beyond") as caught:
+        plan.execute(Endpoints())
+    assert caught.value.trace[-1].kind == "transform"
+    assert caught.value.origin == "spec.data.result.transforms.0"

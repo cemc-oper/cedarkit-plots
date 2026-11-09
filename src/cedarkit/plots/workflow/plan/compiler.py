@@ -325,8 +325,10 @@ class _Compiler:
             kwargs = self.expand(transform.kwargs, origin + f".transforms.{index}.kwargs")
             for repeat in range(transform.repeat):
                 if transform.op == "time_diff":
-                    if len(args) != 1 or kwargs:
+                    if len(args) != 1 or set(kwargs) - {"since_initialization"}:
                         raise self.error("time_diff needs one interval argument", "planner", binding=name)
+                    if "since_initialization" in kwargs and type(kwargs["since_initialization"]) is not bool:
+                        raise self.error("time_diff since_initialization must be boolean", "planner", binding=name)
                     try:
                         interval = pd.Timedelta(args[0])
                         raw_forecast = self.context.forecast_time
@@ -354,7 +356,7 @@ class _Compiler:
                 current = self.add("transform", (name, index, repeat, transform.op, dependencies, args, kwargs),
                                    dependencies, origin + f".transforms.{index}", (name,), descriptor=transform.op,
                                    args=() if transform.op == "time_diff" else args,
-                                   kwargs=(("accumulation_hours", float(interval / pd.Timedelta(hours=1))),)
+                                   kwargs=(("accumulation_hours", float(interval / pd.Timedelta(hours=1))), *sorted(kwargs.items()))
                                    if transform.op == "time_diff" else tuple(sorted(kwargs.items())), pure=descriptor.pure,
                                    reusable=descriptor.reusable)
             self.bindings[name] = current
