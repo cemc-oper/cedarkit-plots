@@ -3,6 +3,7 @@
 import argparse
 from dataclasses import replace
 from datetime import datetime
+from hashlib import sha256
 from importlib.metadata import version
 import json
 from pathlib import Path
@@ -52,6 +53,7 @@ def save(panel, output, name, basemap):
             return {
                 "canvas_pixels": [round(size * figure.dpi) for size in figure.get_size_inches()],
                 "png_pixels": list(image.size),
+                "sha256": sha256(path.read_bytes()).hexdigest(),
                 "dpi": figure.dpi,
                 "basemap": basemap,
                 "axes_xywh_pixels": {key: box_pixels(ax.bbox) for key, ax in axes.items()},
@@ -170,24 +172,24 @@ def main():
     parser.add_argument("output", type=Path)
     parser.add_argument("cases", nargs="*")
     parser.add_argument("--cmadaas", type=Path, help="CMADaaS mount root for the real cases")
-    parser.add_argument("--cemc-basemap", action="store_true", help="Use the installed cemc-meda-data loader for synthetic maps")
+    parser.add_argument("--cemc-basemap", action="store_true", help="Use the installed cemc-meda-data loader")
     args = parser.parse_args()
     matplotlib.use("Agg")
     matplotlib.rcParams["font.family"] = "DejaVu Sans"
     args.output.mkdir(parents=True, exist_ok=True)
     selected = set(args.cases)
     evidence = {}
-    if args.cmadaas:
-        for name, panel in mounted_cases(args.cmadaas, selected):
-            evidence[name] = save(panel, args.output, name, "default / Natural Earth 50m")
+    basemap = "default / Natural Earth 50m"
     if args.cemc_basemap:
         set_default_map_loader_package("cedarkit.plots.map.cemc")
+        basemap = "CEMC / Natural Earth 50m"
+    if args.cmadaas:
+        for name, panel in mounted_cases(args.cmadaas, selected):
+            evidence[name] = save(panel, args.output, name, basemap)
     for name, template, field, title, overlay in synthetic_cases():
         if not selected or name in selected:
-            basemap = "CEMC / Natural Earth 50m" if args.cemc_basemap else "default / Natural Earth 50m"
-            if name.startswith("xy") or name == "time_profile":
-                basemap = None
-            evidence[name] = save(synthetic_panel(name, template, field, title, overlay), args.output, name, basemap)
+            source = None if name.startswith("xy") or name == "time_profile" else basemap
+            evidence[name] = save(synthetic_panel(name, template, field, title, overlay), args.output, name, source)
     if missing := selected - evidence.keys():
         parser.error(f"unknown or missing input for cases: {sorted(missing)}")
     versions = {name: version(name) for name in ("cedarkit-plots", "cartopy", "matplotlib", "numpy", "xarray")}

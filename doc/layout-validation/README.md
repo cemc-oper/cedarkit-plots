@@ -25,3 +25,41 @@ The script holds the inputs, styles and PNG export options fixed. Each output di
 | `time_profile` | Beijing example using the same synthetic section, 200–1000 hPa and +0 to +78 h. |
 
 The workspace layout checklist stores the before and after PNGs, mounted data identifiers and time-pinned business references.
+
+To rerun the baseline, use the renderer from `af63568` with the baseline checkouts. For the Europe and Asia height overlay, use the renderer from `a5a86e1` and select only `europe_asia` and `europe_asia_inset`.
+
+## Accepted candidate
+
+The plotting candidate was `2262b84` with cedar-graph `2f3c770`, cemc-plots-kit `8e5395e` and cedarkit-notebook `c0e6014`. The same Python 3.12 and reki 2026.11.0 environment drove the layout tests and product runs.
+
+| Preset | Before PNG (pixels) | After PNG (pixels) | Visual check |
+| --- | --- | --- | --- |
+| `east_asia` | 1097 × 928 | 1193 × 856 | The main frame and full scale are both 691 px high. The gap is 42 px. |
+| `cn_area` | 597 × 506 | 772 × 436 | National and North China extents have separate tick density and map notes. |
+| `europe_asia` | 828 × 418 | 960 × 513 | Lambert edge labels and the height contours fit with either inset setting. |
+| `global_map` | 908 × 449 | 992 × 502 | The frame keeps a 2:1 ratio and the 80°E center. The seam is filled on both sides. |
+| `global_area` | 908 × 449 | 992 × 502 | The 10° graticule reads over country borders. A caller-selected regional extent renders separately. |
+| `north_polar` | 729 × 608 | 703 × 661 | The circle and its twelve meridian labels fit in both tested canvas shapes. |
+| `ens_cn` | 1613 × 318 | 1662 × 313 | CTL, MAX and members share one temperature scale. Unused grid cells stay empty. |
+| `xy` | 598 × 553 | 764 × 484 | Filled and line-only cases fit with caller-supplied ticks and axis limits. |
+| `time_profile` | 598 × 569 | 826 × 510 | UTC increases from left to right and pressure decreases upwards. The final tick includes the year. |
+
+Run the commands from the owning checkout with the candidate packages installed.
+
+```sh
+# cedarkit-plots
+PYTHONPATH="$PWD/src" python -m pytest -q tests
+python doc/layout-validation/render.py /tmp/layout-cemc east_asia --cmadaas /CMADAAS --cemc-basemap
+
+# cedar-graph
+PYTHONPATH="$PWD/src" python -m pytest -q tests/mock
+
+# cemc-plots-kit
+PYTHONPATH="$PWD/src" python -m pytest -q tests/unit
+cemc-plots run examples/task-v2-gfs-layout-validation.yaml
+cemc-plots run examples/task-v2-ensemble.yaml
+```
+
+The suites passed 456, 65 and 112 tests respectively. The two CLI tasks produced five images. The implicit November palette output matched the explicit winter image byte for byte. The ensemble manifest confirmed all three selected GEPS fields and their pointwise MAX. Jupyter Book 2.1.6 built the executed Notebook outputs, and 56 image assets across 36 pages passed the file and dimensions checks.
+
+Natural Earth 50m country outlines are downloaded on demand for the public global-area loader. The optional CEMC loader supplies operational province and river features. The standalone CEMC run uses the same GFS temperature field as R05. The Notebook build used the local file branch of the MUSIC tutorial and documented synthetic inputs for the three examples limited by the local archive.
