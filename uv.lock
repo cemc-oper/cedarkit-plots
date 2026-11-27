@@ -218,7 +218,7 @@ provides-extras = ["workflow", "test", "cov", "docs"]
 
 [[package]]
 name = "cedarkit-query"
-version = "0.2.1"
+version = "0.2.3"
 source = { directory = "../cedarkit-query" }
 dependencies = [
     { name = "jsonschema" },
@@ -311,21 +311,6 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/a0/1d/ec1a60bd1a10daa292d3cd6bb0b359a81607154fb8165f3ec95fe003b85c/cffi-2.0.0-cp314-cp314t-win32.whl", hash = "sha256:1fc9ea04857caf665289b7a75923f2c6ed559b8298a1b8c49e59f7dd95c8481e", size = 180487, upload-time = "2025-09-08T23:23:40.423Z" },
     { url = "https://files.pythonhosted.org/packages/bf/41/4c1168c74fac325c0c8156f04b6749c8b6a8f405bbf91413ba088359f60d/cffi-2.0.0-cp314-cp314t-win_amd64.whl", hash = "sha256:d68b6cef7827e8641e8ef16f4494edda8b36104d79773a334beaa1e3521430f6", size = 191726, upload-time = "2025-09-08T23:23:41.742Z" },
     { url = "https://files.pythonhosted.org/packages/ae/3a/dbeec9d1ee0844c679f6bb5d6ad4e9f198b1224f4e7a32825f47f6192b0c/cffi-2.0.0-cp314-cp314t-win_arm64.whl", hash = "sha256:0a1527a803f0a659de1af2e1fd700213caba79377e27e4693648c2923da066f9", size = 184195, upload-time = "2025-09-08T23:23:43.004Z" },
-]
-
-[[package]]
-name = "cfgrib"
-version = "0.9.15.1"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "attrs" },
-    { name = "click" },
-    { name = "eccodes" },
-    { name = "numpy" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/4a/51/cace2747a517667bbbe5fcab1f35958ad05c778251a452c461b8b3649dbe/cfgrib-0.9.15.1.tar.gz", hash = "sha256:d959d8b97e55a63646fa86686b297905ff7f2918a91e3a11d6292dab09598e4d", size = 9746591, upload-time = "2025-09-30T22:46:14.133Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/6d/e8/16c58c57c9ce1474dd1e50090ebd78b008c70fc4f06793da65f9a0aba391/cfgrib-0.9.15.1-py3-none-any.whl", hash = "sha256:f1bee90e86917389be9f767051bf32d00f95f6f4e4312b344567511b3cfd62d2", size = 49123, upload-time = "2025-09-30T22:46:12.206Z" },
 ]
 
 [[package]]
@@ -2182,7 +2167,6 @@ name = "reki"
 source = { editable = "../reki" }
 dependencies = [
     { name = "cedarkit-query" },
-    { name = "cfgrib" },
     { name = "click" },
     { name = "eccodes" },
     { name = "eccodeslib", marker = "sys_platform != 'win32'" },
@@ -2200,7 +2184,6 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "cedarkit-query", directory = "../cedarkit-query" },
-    { name = "cfgrib" },
     { name = "click" },
     { name = "dask", marker = "extra == 'lazy'" },
     { name = "eccodes" },
