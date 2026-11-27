@@ -12,6 +12,7 @@ from cedarkit.plots.config import (
     DecorationSpec,
     GridlineSpec,
     LayoutSpec,
+    Rect,
     SubplotSpec,
     Theme,
     TimeStepFormatter,
@@ -65,6 +66,8 @@ def xy_chart(
     ylim: Sequence[float] | None = None,
     xticks: Sequence[float] | None = None,
     yticks: Sequence[float] | None = None,
+    xlabel: str | None = None,
+    ylabel: str | None = None,
     invert_y: bool = False,
     xformatter: str | TimeStepFormatter | None = None,
     yformatter: str | TimeStepFormatter | None = None,
@@ -98,6 +101,8 @@ def xy_chart(
         ylim=normalized_ylim,
         xticks=normalized_xticks,
         yticks=normalized_yticks,
+        xlabel=xlabel,
+        ylabel=ylabel,
         invert_y=invert_y,
         xformatter=xformatter,
         yformatter=yformatter,
@@ -107,6 +112,7 @@ def xy_chart(
         subplots={
             "main": SubplotSpec(
                 kind="xy",
+                position=Rect(space="chart", bounds=(.06, .07, .88, .85)),
                 axis=axis,
                 aspect=aspect,
             ),
@@ -118,7 +124,7 @@ def xy(**kwargs: Any) -> PanelTemplate:
     """Return a one-Chart Panel preset for :func:`xy_chart`."""
 
     return PanelTemplate(
-        layout=LayoutSpec(rows=1, columns=1, expected_charts=1),
+        layout=LayoutSpec(rows=1, columns=1, figsize=(8.8, 5.8), expected_charts=1),
         theme=Theme(),
         chart_defaults=xy_chart(**kwargs),
         decorations=DecorationSpec(),

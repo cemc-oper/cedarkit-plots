@@ -492,6 +492,8 @@ class BorderSpec:
 class AxisSpec:
     xticks: tuple[float, ...] | None = field(default=UNSET)
     yticks: tuple[float, ...] | None = field(default=UNSET)
+    xlabel: str | None = field(default=UNSET)
+    ylabel: str | None = field(default=UNSET)
     xlim: tuple[float, float] | None = field(default=UNSET)
     ylim: tuple[float, float] | None = field(default=UNSET)
     invert_y: bool = field(default=UNSET)
@@ -505,6 +507,10 @@ class AxisSpec:
             value = getattr(self, name)
             if _is_declared(value) and value is not None:
                 object.__setattr__(self, name, _number_tuple(value, name, allow_none=False))
+        for name in ("xlabel", "ylabel"):
+            value = getattr(self, name)
+            if _is_declared(value) and value is not None and not isinstance(value, str):
+                _fail(f"{name} must be text or None", path=(name,))
         for name in ("xlim", "ylim"):
             value = getattr(self, name)
             if _is_declared(value) and value is not None:
@@ -1113,6 +1119,8 @@ def resolve_axis(value: AxisSpec | _ConfigSentinel = UNSET, *, map_axis: bool = 
     return AxisSpec(
         xticks=None if not _is_declared(value.xticks) else value.xticks,
         yticks=None if not _is_declared(value.yticks) else value.yticks,
+        xlabel=None if not _is_declared(value.xlabel) else value.xlabel,
+        ylabel=None if not _is_declared(value.ylabel) else value.ylabel,
         xlim=None if not _is_declared(value.xlim) else value.xlim,
         ylim=None if not _is_declared(value.ylim) else value.ylim,
         invert_y=False if not _is_declared(value.invert_y) else value.invert_y,

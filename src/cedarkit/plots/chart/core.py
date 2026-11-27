@@ -2014,9 +2014,10 @@ def _draw_layer(
                 if getattr(label, key) is not None
             }
             labels = ax.clabel(result, levels=label.levels, **label_kwargs)
-            if map_axis and labels:
-                # GeoAxes updates its clipped boundary during bbox calculation.
-                ax.get_tightbbox(bbox_extra_artists=[])
+            if labels:
+                if map_axis:
+                    # GeoAxes updates its clipped boundary during bbox calculation.
+                    ax.get_tightbbox(bbox_extra_artists=[])
                 boundary = ax.patch.get_path().transformed(ax.patch.get_transform())
                 for text in labels:
                     if not boundary.contains_points(text.get_window_extent().corners()).all():
@@ -2213,11 +2214,15 @@ def _apply_axis_spec(
     ax: Any,
     axis: AxisSpec,
     *,
-    tick_fontsize: float,
+    theme: Theme,
     map_axis: bool = False,
     tick_crs: Any = None,
 ) -> None:
-    ax.tick_params(labelsize=tick_fontsize)
+    ax.tick_params(labelsize=theme.tick_fontsize)
+    if axis.xlabel is not None:
+        ax.set_xlabel(axis.xlabel, fontsize=theme.font_size, fontfamily=theme.font_family)
+    if axis.ylabel is not None:
+        ax.set_ylabel(axis.ylabel, fontsize=theme.font_size, fontfamily=theme.font_family)
     if axis.xticks is not None:
         if map_axis:
             ax.set_xticks(axis.xticks, crs=tick_crs)
@@ -2257,8 +2262,8 @@ def _apply_axis_spec(
                 alpha=grid.alpha,
             )
             if grid.labels:
-                gridliner.xlabel_style["size"] = tick_fontsize
-                gridliner.ylabel_style["size"] = tick_fontsize
+                gridliner.xlabel_style["size"] = theme.tick_fontsize
+                gridliner.ylabel_style["size"] = theme.tick_fontsize
             if grid.xlocators is not None:
                 gridliner.xlocator = FixedLocator(grid.xlocators)
             if grid.ylocators is not None:
@@ -2497,7 +2502,7 @@ def _create_subplots(
             _apply_axis_spec(
                 ax,
                 subplot_spec.axis,
-                tick_fontsize=spec.theme.tick_fontsize,
+                theme=spec.theme,
                 map_axis=map_axis,
                 tick_crs=(subplot_spec.domain.extent_crs if map_axis else None),
             )

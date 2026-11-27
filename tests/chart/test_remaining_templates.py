@@ -173,6 +173,21 @@ def test_global_chart_accepts_direct_custom_basemap():
     assert preset.subplots["main"].basemap == custom
 
 
+def test_xy_keeps_explicit_limits_ticks_and_inverted_axis():
+    template = xy(xlim=(0, 18), ylim=(500, 1000), xticks=(0, 6, 18),
+                  yticks=(500, 700, 1000), invert_y=True, xlabel="Lead time (h)", ylabel="Pressure (hPa)")
+    with Panel(template=template) as panel:
+        chart = panel.add_chart()
+        chart.contour(field(), style=ContourStyle(levels=(0, 5, 10, 15), colors=("black",)))
+        assert len(panel.render().axes) == 1
+        ax = chart.main.ax
+        assert ax.get_xlim() == (0, 18)
+        assert ax.get_ylim() == (1000, 500)
+        assert tuple(ax.get_xticks()) == (0, 6, 18)
+        assert tuple(ax.get_yticks()) == (500, 700, 1000)
+        assert (ax.get_xlabel(), ax.get_ylabel()) == ("Lead time (h)", "Pressure (hPa)")
+
+
 @pytest.mark.parametrize("area", [(20, 150, -20, 60), (230, 280, 10, 50)])
 def test_global_area_respects_selected_region_and_draws_dense_grid(area):
     full = global_area_chart().subplots["main"]

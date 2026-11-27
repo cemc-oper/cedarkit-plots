@@ -99,8 +99,10 @@ def synthetic_cases():
     yield "north_polar", north_polar(), temperature, "Northern Hemisphere 2 m temperature", None
     wide_polar = replace(north_polar(), layout=LayoutSpec(figsize=(12, 7), dpi=160))
     yield "north_polar_wide", wide_polar, temperature, "Northern Hemisphere 2 m temperature", None
-    yield "xy", xy(), profile, "Filled temperature section", None
-    line = xy(xlim=(6, 66), ylim=(300, 1000), xticks=(6, 30, 54), yticks=(300, 500, 700, 1000), invert_y=True)
+    axes_labels = {"xlabel": "Lead time (h)", "ylabel": "Pressure (hPa)"}
+    yield "xy", xy(**axes_labels), profile, "Filled temperature section", None
+    line = xy(xlim=(6, 66), ylim=(300, 1000), xticks=(6, 30, 54),
+              yticks=(300, 500, 700, 1000), invert_y=True, **axes_labels)
     yield "xy_lines", line, profile, "Temperature isolines", None
     yield "time_profile", time_profile(steps, levels, datetime.fromisoformat(GFS_INIT)), profile, "Beijing | Temperature", None
 
