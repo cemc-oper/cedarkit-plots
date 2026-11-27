@@ -4,14 +4,18 @@ import matplotlib
 
 matplotlib.use("Agg")
 
+import cartopy.crs as ccrs
 import numpy as np
 import pytest
 import xarray as xr
 
 from cedarkit.plots import Panel
-from cedarkit.plots.config import ColorbarSpec, DecorationSpec, LayoutSpec, Rect, TitleSpec
+from cedarkit.plots.config import (
+    BasemapSpec, ColorbarSpec, DecorationSpec, LayoutSpec, Rect, Theme, TitleSpec,
+)
 from cedarkit.plots.errors import ContentError, RenderRequiredError
 from cedarkit.plots.style import ContourStyle, LevelStep
+from cedarkit.plots.templates import east_asia
 
 
 def field(offset: float = 0, *, name: str = "temperature") -> xr.DataArray:
@@ -121,3 +125,53 @@ def test_layer_references_must_be_removed_before_layer_removal():
     panel.remove_colorbar("temperature")
     layer.remove()
     panel.close()
+
+
+@pytest.mark.parametrize("figsize", [(10, 4), (6, 9)])
+def test_chart_colorbar_tracks_actual_map_frame_when_aspect_changes(figsize, tmp_path):
+    template = east_asia(with_inset=False, main_basemap=BasemapSpec(features=()))
+    with Panel(template=template, layout=LayoutSpec(figsize=figsize)) as panel:
+        chart = panel.add_chart(id="map")
+        chart.configure(decorations=DecorationSpec(
+            colorbars={"local": ColorbarSpec(tick_fontsize=13)},
+        ))
+        data = field().rename(x="longitude", y="latitude").assign_coords(
+            longitude=np.linspace(70, 140, 5), latitude=np.linspace(15, 55, 4),
+        )
+        layer = chart.contourf(data, style=fixed_style(), data_crs=ccrs.PlateCarree())
+        chart.set_title("Map title")
+        chart.colorbar(layer, id="local", label="Air temperature (K)")
+        panel.save(tmp_path / "map.png", dpi=150)
+        main = chart.main.ax
+        bar = panel.fig.axes[-1]
+        assert bar.bbox.y0 == pytest.approx(main.bbox.y0)
+        assert bar.bbox.height == pytest.approx(main.bbox.height)
+        right_edge = main.get_tightbbox(bbox_extra_artists=[]).x1
+        assert bar.bbox.x0 - right_edge == pytest.approx(7 * panel.fig.dpi / 72)
+        assert bar.get_ylabel() == "Air temperature (K)"
+        assert bar.get_yticklabels()[0].get_fontsize() == 13
+        assert main.texts[-1].get_window_extent().y0 > main.bbox.y1
+
+
+def test_panel_defaults_leave_space_for_shared_horizontal_bar_and_respect_placements(tmp_path):
+    with Panel(
+        layout=LayoutSpec(rows=1, columns=2, figsize=(7, 3)),
+        theme=Theme(tick_fontsize=14, font_size=15),
+        decorations=DecorationSpec(colorbars={"shared": ColorbarSpec(orientation="horizontal")}),
+    ) as panel:
+        chart_a = panel.add_chart(id="a")
+        chart_b = panel.add_chart(id="b")
+        layers = [chart.contourf(field(), style=fixed_style()) for chart in (chart_a, chart_b)]
+        panel.colorbar(layers, id="shared", label="Temperature (K)")
+        panel.save(tmp_path / "shared.png")
+        bar = panel.fig.axes[-1]
+        assert bar.bbox.x0 == pytest.approx(chart_a.main.ax.bbox.x0)
+        assert bar.bbox.x1 == pytest.approx(chart_b.main.ax.bbox.x1)
+        assert bar.bbox.y1 < min(chart.main.ax.xaxis.get_tightbbox().y0 for chart in (chart_a, chart_b))
+        assert bar.xaxis.label.get_fontsize() == 15
+
+        bounds = (.15, .04, .7, .04)
+        panel.configure(decorations=DecorationSpec(colorbars={"shared": ColorbarSpec(
+            orientation="horizontal", position=Rect(space="figure", bounds=bounds),
+        )}))
+        assert panel.render().axes[-1].get_position().bounds == pytest.approx(bounds)

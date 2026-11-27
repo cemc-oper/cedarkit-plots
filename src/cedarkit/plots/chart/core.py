@@ -18,6 +18,7 @@ import matplotlib.pyplot as plt
 from matplotlib.artist import Artist
 from matplotlib.figure import Figure
 from matplotlib.ticker import FuncFormatter
+from matplotlib.transforms import Bbox
 import numpy as np
 import xarray as xr
 
@@ -1596,15 +1597,17 @@ def _render_one_title(
     title = title or TitleSpec()
     if title.enabled is False:
         return
-    position = title.position
-    if not isinstance(position, (TextPosition, Rect)):
-        position = (
-            TextPosition(space="figure", xy=(.5, .98), va="top")
-            if owner is None
-            else TextPosition(space="subplot", subplot="main", xy=(.5, 1.02), va="bottom")
-        )
     fontsize = theme.title_fontsize if title.fontsize is UNSET else title.fontsize
     color = theme.text_color if title.color is UNSET else title.color
+    position = title.position
+    if not isinstance(position, (TextPosition, Rect)):
+        if owner is None:
+            position = TextPosition(space="figure", xy=(.5, .98), va="top")
+        else:
+            ax = subplots["main"]._ax
+            top = ax.get_tightbbox().y1 + 6 * figure.dpi / 72
+            y = ax.transAxes.inverted().transform((ax.bbox.x0, top))[1]
+            position = TextPosition(space="subplot", subplot="main", xy=(.5, y), va="bottom")
     if isinstance(position, Rect):
         left, bottom, width, height = _rect_box(
             position,
@@ -1771,6 +1774,24 @@ def _colorbar_candidates(
     return candidates
 
 
+def _automatic_colorbar_box(
+    figure: Figure,
+    targets: Sequence[Any],
+    occupied: Sequence[Any],
+    orientation: str,
+) -> tuple[float, float, float, float]:
+    """Fit the bar alongside final axes and leave room for their ticks."""
+    span = Bbox.union([ax.get_window_extent() for ax in targets])
+    outer = Bbox.union([ax.get_tightbbox(bbox_extra_artists=[]) for ax in occupied])
+    gap = 7 * figure.dpi / 72
+    width = 9 * figure.dpi / 72
+    if orientation == "vertical":
+        box = Bbox.from_bounds(outer.x1 + gap, span.y0, width, span.height)
+    else:
+        box = Bbox.from_bounds(span.x0, outer.y0 - gap - width, span.width, width)
+    return box.transformed(figure.transFigure.inverted()).bounds
+
+
 def _render_colorbars(
     figure: Figure,
     effective: Any,
@@ -1782,6 +1803,7 @@ def _render_colorbars(
     slot_boxes: Mapping[str, tuple[float, float, float, float]],
 ) -> dict[str, Any]:
     result: dict[str, Any] = {}
+    auto_axes: dict[tuple[Chart | None, str], list[Any]] = {}
     for binding in bindings.values():
         candidates = _colorbar_candidates(binding, effective, rendered_results)
         first_layer, first_target, first_mappable = candidates[0]
@@ -1837,14 +1859,10 @@ def _render_colorbars(
             chart_box = chart_boxes[owner.id]
             subplots = rendered_subplots[owner]
         position = decoration.position
-        if not isinstance(position, (Rect, TextPosition)):
-            position = (
-                Rect(space="figure", bounds=(.92, .15, .02, .7))
-                if owner is None
-                else Rect(space="chart", bounds=(.87, .12, .025, .76))
-            )
+        automatic = not isinstance(position, (Rect, TextPosition))
+        auto_key = (owner, orientation)
         if isinstance(position, TextPosition):
-            _, _, x, y = _position_point(
+            kind, ax, x, y = _position_point(
                 position,
                 figure=figure,
                 chart_box=chart_box,
@@ -1852,14 +1870,17 @@ def _render_colorbars(
                 slot_boxes=slot_boxes,
                 owner=owner,
             )
+            if kind == "subplot":
+                x, y = figure.transFigure.inverted().transform(ax.transAxes.transform((x, y)))
             width, height = (.025, .7) if orientation == "vertical" else (.7, .025)
             position = Rect(space="figure", bounds=(x - width / 2, y - height / 2, width, height))
-        box = _rect_box(
-            position,
-            chart_box=chart_box,
-            subplots=subplots,
-            slot_boxes=slot_boxes,
-        )
+        if automatic:
+            targets = [rendered_subplots[layer.chart][target]._ax for layer, target, _ in candidates]
+            scope = rendered_subplots.values() if owner is None else (subplots,)
+            occupied = [subplot._ax for chart_subplots in scope for subplot in chart_subplots.values()]
+            box = _automatic_colorbar_box(figure, targets, occupied + auto_axes.get(auto_key, []), orientation)
+        else:
+            box = _rect_box(position, chart_box=chart_box, subplots=subplots, slot_boxes=slot_boxes)
         cax = figure.add_axes(box)
         colorbar = figure.colorbar(
             first_mappable,
@@ -1867,11 +1888,13 @@ def _render_colorbars(
             orientation=orientation,
         )
         if binding.label is not None:
-            colorbar.set_label(binding.label)
+            colorbar.set_label(binding.label, fontsize=theme.font_size, fontfamily=theme.font_family)
         if ticks is not None:
             colorbar.set_ticks(ticks)
         tick_fontsize = theme.tick_fontsize if decoration.tick_fontsize is UNSET else decoration.tick_fontsize
         colorbar.ax.tick_params(labelsize=tick_fontsize)
+        if automatic:
+            auto_axes.setdefault(auto_key, []).append(cax)
         result[binding.id] = colorbar
     return result
 
