@@ -14,7 +14,6 @@ from cedarkit.plots.config import (
     AxisSpec,
     BasemapSpec,
     ChartSpec,
-    ColorbarSpec,
     DecorationSpec,
     GridlineSpec,
     LayoutSpec,
@@ -22,7 +21,9 @@ from cedarkit.plots.config import (
     MapFeatureSpec,
     Rect,
     SubplotSpec,
+    TextPosition,
     Theme,
+    TitleSpec,
 )
 from cedarkit.plots.domains import (
     EAST_ASIA_DOMAIN,
@@ -78,14 +79,19 @@ def direct_chart_spec(main: BasemapSpec, sub: BasemapSpec) -> ChartSpec:
                 kind="map",
                 domain=EAST_ASIA_DOMAIN,
                 map_crs=ccrs.PlateCarree(),
-                position=Rect(space="chart", bounds=(.125, .2, .75, .6)),
+                position=Rect(space="chart", bounds=(.025, .025, .91, .95)),
                 aspect=1.25,
                 axis=AxisSpec(
                     xticks=main_ticks,
                     yticks=main_latitudes,
+                    xformatter="longitude",
+                    yformatter="latitude",
                     gridlines=GridlineSpec(
                         xlocators=main_ticks,
                         ylocators=main_latitudes,
+                        color="#4f5964",
+                        linewidth=.35,
+                        alpha=.5,
                     ),
                 ),
                 basemap=main,
@@ -97,13 +103,9 @@ def direct_chart_spec(main: BasemapSpec, sub: BasemapSpec) -> ChartSpec:
                 position=Rect(
                     space="subplot",
                     subplot="main",
-                    bounds=(0.0, 0.0, .1 / .75, .14 / .6),
+                    bounds=(0.0, 0.0, .135, .235),
                 ),
-                aspect=(
-                    (SOUTH_CHINA_SEA_DOMAIN.extent[1] - SOUTH_CHINA_SEA_DOMAIN.extent[0])
-                    / (.1 / .14)
-                    / (SOUTH_CHINA_SEA_DOMAIN.extent[3] - SOUTH_CHINA_SEA_DOMAIN.extent[2])
-                ),
+                aspect="equal",
                 anchor="SW",
                 axis=AxisSpec(
                     xticks=(),
@@ -118,10 +120,18 @@ def direct_chart_spec(main: BasemapSpec, sub: BasemapSpec) -> ChartSpec:
             ),
         },
         decorations=DecorationSpec(
-            colorbars={
-                "*": ColorbarSpec(
-                    position=Rect(space="chart", bounds=(.89, .275, .025, .45)),
-                ),
+            titles={
+                name: TitleSpec(
+                    position=TextPosition(space="subplot", subplot="main", xy=xy, ha=ha, va=va),
+                    fontsize=size,
+                )
+                for name, xy, ha, va, size in (
+                    ("heading", (0, 1.018), "left", "bottom", 13),
+                    ("model", (1, 1.018), "right", "bottom", 11),
+                    ("init", (0, -.065), "left", "top", 9),
+                    ("lead", (.5, -.065), "center", "top", 9),
+                    ("valid", (1, -.065), "right", "top", 9),
+                )
             },
         ),
     )
@@ -173,7 +183,8 @@ def test_direct_and_panel_preset_entries_have_equal_effective_map_configuration(
         )
     )
     direct_panel = Panel(
-        layout=LayoutSpec(rows=1, columns=1, dpi=160, expected_charts=1),
+        layout=LayoutSpec(rows=1, columns=1, figsize=(8, 6.1), dpi=160,
+                          margins=(.055, .115, .125, .09), expected_charts=1),
         theme=Theme(title_fontsize=14, tick_fontsize=9),
         chart_defaults=direct_chart_spec(main, sub),
         decorations=DecorationSpec(),

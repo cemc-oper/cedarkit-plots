@@ -9,7 +9,6 @@ import cartopy.crs as ccrs
 from cedarkit.plots.config import (
     AxisSpec,
     BasemapSpec,
-    ColorbarSpec,
     DecorationSpec,
     GridlineSpec,
     LayoutSpec,
@@ -17,7 +16,9 @@ from cedarkit.plots.config import (
     MapInfo,
     Rect,
     SubplotSpec,
+    TextPosition,
     Theme,
+    TitleSpec,
 )
 from cedarkit.plots.errors import ConfigError
 from cedarkit.plots.map import MapType
@@ -32,21 +33,19 @@ from cedarkit.plots.domains.east_asia_config import (
 from . import ChartTemplate, PanelTemplate
 
 
-_MAIN_POSITION = Rect(space="chart", bounds=(.125, .2, .75, .6))
-_INSET_WIDTH = .1
-_INSET_HEIGHT = .14
+_MAIN_POSITION = Rect(space="chart", bounds=(.025, .025, .91, .95))
 _INSET_POSITION = Rect(
     space="subplot",
     subplot="main",
-    bounds=(0.0, 0.0, _INSET_WIDTH / .75, _INSET_HEIGHT / .6),
+    bounds=(0.0, 0.0, .135, .235),
 )
 
 
-def _axes_aspect_for_box(domain: Any, box_aspect: float) -> float:
-    """Return Matplotlib's aspect value for a target map axes width/height."""
-
-    west, east, south, north = domain.extent
-    return (east - west) / box_aspect / (north - south)
+def _map_title(x: float, y: float, ha: str, va: str, fontsize: float) -> TitleSpec:
+    return TitleSpec(
+        position=TextPosition(space="subplot", subplot="main", xy=(x, y), ha=ha, va=va),
+        fontsize=fontsize,
+    )
 
 
 def _require_bool(value: Any, name: str) -> bool:
@@ -81,7 +80,7 @@ def _main_basemap(map_info: MapInfo) -> BasemapSpec:
         features=(
             MapFeatureSpec(
                 name="coastline",
-                kwargs={"scale": "50m", "style": {"linewidth": .5}},
+                kwargs={"scale": "50m", "style": {"linewidth": .4}},
             ),
             MapFeatureSpec(
                 name="lakes",
@@ -95,11 +94,11 @@ def _main_basemap(map_info: MapInfo) -> BasemapSpec:
                     },
                 },
             ),
-            MapFeatureSpec(name="china_coastline"),
-            MapFeatureSpec(name="china_borders"),
-            MapFeatureSpec(name="china_provinces"),
-            MapFeatureSpec(name="china_rivers"),
-            MapFeatureSpec(name="china_nine_lines"),
+            MapFeatureSpec(name="china_coastline", style={"linewidth": .4}),
+            MapFeatureSpec(name="china_borders", style={"linewidth": .55}),
+            MapFeatureSpec(name="china_provinces", style={"linewidth": .3}),
+            MapFeatureSpec(name="china_rivers", style={"linewidth": .28, "alpha": .75}),
+            MapFeatureSpec(name="china_nine_lines", style={"linewidth": .4}),
         ),
         map_info=map_info,
     )
@@ -113,11 +112,11 @@ def _sub_basemap(map_info: MapInfo) -> BasemapSpec:
                 name="coastline",
                 kwargs={"scale": "50m", "style": {"linewidth": .25}},
             ),
-            MapFeatureSpec(name="china_coastline"),
-            MapFeatureSpec(name="china_borders"),
-            MapFeatureSpec(name="china_provinces"),
-            MapFeatureSpec(name="china_rivers"),
-            MapFeatureSpec(name="china_nine_lines"),
+            MapFeatureSpec(name="china_coastline", style={"linewidth": .35}),
+            MapFeatureSpec(name="china_borders", style={"linewidth": .4}),
+            MapFeatureSpec(name="china_provinces", style={"linewidth": .2}),
+            MapFeatureSpec(name="china_rivers", style={"linewidth": .2, "alpha": .75}),
+            MapFeatureSpec(name="china_nine_lines", style={"linewidth": .35}),
         ),
         map_info=map_info,
     )
@@ -129,9 +128,14 @@ def _main_axis() -> AxisSpec:
     return AxisSpec(
         xticks=xticks,
         yticks=yticks,
+        xformatter="longitude",
+        yformatter="latitude",
         gridlines=GridlineSpec(
             xlocators=xticks,
             ylocators=yticks,
+            color="#4f5964",
+            linewidth=.35,
+            alpha=.5,
         ),
     )
 
@@ -191,10 +195,7 @@ def east_asia_chart(
             domain=SOUTH_CHINA_SEA_DOMAIN,
             map_crs=ccrs.PlateCarree(),
             position=_INSET_POSITION,
-            aspect=_axes_aspect_for_box(
-                SOUTH_CHINA_SEA_DOMAIN,
-                _INSET_WIDTH / _INSET_HEIGHT,
-            ),
+            aspect="equal",
             anchor="SW",
             axis=_sub_axis(),
             basemap=sub_basemap,
@@ -202,10 +203,12 @@ def east_asia_chart(
     return ChartTemplate(
         subplots=subplots,
         decorations=DecorationSpec(
-            colorbars={
-                "*": ColorbarSpec(
-                    position=Rect(space="chart", bounds=(.89, .275, .025, .45)),
-                ),
+            titles={
+                "heading": _map_title(0, 1.018, "left", "bottom", 13),
+                "model": _map_title(1, 1.018, "right", "bottom", 11),
+                "init": _map_title(0, -.065, "left", "top", 9),
+                "lead": _map_title(.5, -.065, "center", "top", 9),
+                "valid": _map_title(1, -.065, "right", "top", 9),
             },
         ),
     )
@@ -222,7 +225,8 @@ def east_asia(
     """Return a single-Chart Panel preset using :func:`east_asia_chart`."""
 
     return PanelTemplate(
-        layout=LayoutSpec(rows=1, columns=1, figsize=(8.0, 8.0), dpi=160, expected_charts=1),
+        layout=LayoutSpec(rows=1, columns=1, figsize=(8, 6.1), dpi=160,
+                          margins=(.055, .115, .125, .09), expected_charts=1),
         theme=Theme(title_fontsize=14, tick_fontsize=9),
         chart_defaults=east_asia_chart(
             with_inset=with_inset,

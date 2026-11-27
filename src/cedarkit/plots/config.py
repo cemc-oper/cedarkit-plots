@@ -523,8 +523,11 @@ class AxisSpec:
 
 @dataclass(frozen=True, kw_only=True, slots=True)
 class MapFeatureSpec:
+    """Loader arguments and optional Matplotlib styling for a map feature."""
+
     name: str
     kwargs: Mapping[str, Any] = field(default=UNSET)
+    style: Mapping[str, Any] = field(default=UNSET)
     enabled: bool = field(default=UNSET)
 
     def __post_init__(self) -> None:
@@ -532,6 +535,8 @@ class MapFeatureSpec:
             _fail("MapFeatureSpec.name must be non-empty", path=("name",))
         if _is_declared(self.kwargs):
             object.__setattr__(self, "kwargs", _mapping(self.kwargs, "kwargs"))
+        if _is_declared(self.style):
+            object.__setattr__(self, "style", _mapping(self.style, "style"))
         if _is_declared(self.enabled):
             _check_bool(self.enabled, "enabled")
 
@@ -1131,6 +1136,7 @@ def resolve_basemap(value: BasemapSpec | _ConfigSentinel = UNSET) -> BasemapSpec
         MapFeatureSpec(
             name=item.name,
             kwargs={} if not _is_declared(item.kwargs) else item.kwargs,
+            style={} if not _is_declared(item.style) else item.style,
             enabled=True if not _is_declared(item.enabled) else item.enabled,
         )
         for item in features

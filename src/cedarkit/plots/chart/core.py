@@ -2386,7 +2386,7 @@ def _render_basemap(ax: Any, subplot_spec: SubplotSpec) -> None:
                     code="invalid_map_feature",
                 )
             for item in features:
-                ax.add_feature(item)
+                ax.add_feature(item, **feature.style)
         if basemap.map_info is not None:
             text, x, y = _map_info_values(basemap.map_info)
             add_map_info_text(ax, x=x, y=y, text=text)

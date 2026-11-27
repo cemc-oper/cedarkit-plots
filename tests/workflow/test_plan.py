@@ -182,6 +182,12 @@ def test_bound_context_exposes_valid_time_for_duration_and_timestamp_forecasts()
     precise = compile_recipe(recipe({"result": {"field": {"parameter": "local.temperature"}}}),
         CompileContext(start_time="2026-01-01T00:30:01.123Z", forecast_time="6h"))
     assert precise.context["valid_time_label"] == "20260101063001.123 UTC"
+    assert precise.context["start_time_cst_label"] == "20260101083001.123 CST"
+    assert precise.context["valid_time_cst_label"] == "20260101143001.123 CST"
+    overnight = compile_recipe(recipe({"result": {"field": {"parameter": "local.temperature"}}}),
+        CompileContext(start_time="2026-11-02T12:00Z", forecast_time="6h"))
+    assert overnight.context["valid_time_cst_label"] == "2026110302 CST"
+    assert overnight.context["forecast_lead_label"] == "+6 h"
 
 
 def test_multi_output_slots_are_stable():

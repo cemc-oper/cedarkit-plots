@@ -59,6 +59,7 @@ def save(panel, output, name, basemap):
                     box_pixels(ax.bbox) for ax in figure.axes if ax not in axes.values()
                 ],
                 "figure_text": [item.get_text() for item in figure.texts],
+                "axes_text": {key: [item.get_text() for item in ax.texts] for key, ax in axes.items()},
             }
 
 

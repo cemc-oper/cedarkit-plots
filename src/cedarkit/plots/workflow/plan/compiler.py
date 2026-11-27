@@ -108,10 +108,12 @@ def _time(value: Any) -> str | None:
     return stamp.isoformat().replace("+00:00", "Z")
 
 
-def _time_label(value: Any) -> str | None:
+def _time_label(value: Any, *, beijing: bool = False) -> str | None:
     if value is None:
         return None
     stamp = pd.Timestamp(_time(value))
+    if beijing:
+        stamp = stamp.tz_convert("Asia/Shanghai")
     precision = "%Y%m%d%H"
     if stamp.minute or stamp.second or stamp.microsecond or stamp.nanosecond:
         precision += "%M"
@@ -120,7 +122,7 @@ def _time_label(value: Any) -> str | None:
     label = stamp.strftime(precision)
     if stamp.microsecond or stamp.nanosecond:
         label += "." + f"{stamp.microsecond * 1000 + stamp.nanosecond:09d}".rstrip("0")
-    return label + " UTC"
+    return label + (" CST" if beijing else " UTC")
 
 
 @dataclass(frozen=True)
@@ -198,8 +200,9 @@ class _Compiler:
 
     def _context_values(self) -> dict[str, Any]:
         values = {"start_time": _time(self.context.start_time), "forecast_time": _time(self.context.forecast_time),
-                  "valid_time": None, "forecast_hour": None, "previous_forecast_hour": None,
+                  "valid_time": None, "forecast_hour": None, "forecast_lead_label": None, "previous_forecast_hour": None,
                   "start_time_label": _time_label(self.context.start_time), "valid_time_label": None,
+                  "start_time_cst_label": _time_label(self.context.start_time, beijing=True),
                   "provider_slot": self.context.provider_slot, "cardinality": self.context.cardinality}
         if self.context.forecast_time is not None:
             forecast = None
@@ -211,11 +214,14 @@ class _Compiler:
                 forecast = pd.Timestamp(self.context.forecast_time) - pd.Timestamp(self.context.start_time)
                 values["valid_time"] = _time(self.context.forecast_time)
             if forecast is not None:
-                values["forecast_hour"] = f"{int(forecast / pd.Timedelta(hours=1)):03d}"
+                hours = forecast / pd.Timedelta(hours=1)
+                values["forecast_hour"] = f"{int(hours):03d}"
+                values["forecast_lead_label"] = f"{hours:+g} h"
                 if self.params.get("interval") is not None:
                     previous = forecast - pd.Timedelta(self.params["interval"])
                     values["previous_forecast_hour"] = f"{int(previous / pd.Timedelta(hours=1)):03d}"
         values["valid_time_label"] = _time_label(values["valid_time"])
+        values["valid_time_cst_label"] = _time_label(values["valid_time"], beijing=True)
         return values
 
     def _content(self):
