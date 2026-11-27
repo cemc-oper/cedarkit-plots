@@ -12,6 +12,7 @@ from types import MappingProxyType
 from typing import Any
 
 import cartopy.crs as ccrs
+from cartopy.mpl.gridliner import Gridliner
 import matplotlib.path as mpath
 import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
@@ -1782,7 +1783,10 @@ def _automatic_colorbar_box(
 ) -> tuple[float, float, float, float]:
     """Fit the bar alongside final axes and leave room for their ticks."""
     span = Bbox.union([ax.get_window_extent() for ax in targets])
-    outer = Bbox.union([ax.get_tightbbox(bbox_extra_artists=[]) for ax in occupied])
+    outer = Bbox.union([
+        ax.get_tightbbox(bbox_extra_artists=[artist for artist in ax.artists if isinstance(artist, Gridliner)])
+        for ax in occupied
+    ])
     gap = 7 * figure.dpi / 72
     width = 9 * figure.dpi / 72
     if orientation == "vertical":
@@ -1998,6 +2002,13 @@ def _draw_layer(
                 if getattr(label, key) is not None
             }
             labels = ax.clabel(result, levels=label.levels, **label_kwargs)
+            if map_axis and labels:
+                # GeoAxes updates its clipped boundary during bbox calculation.
+                ax.get_tightbbox(bbox_extra_artists=[])
+                boundary = ax.patch.get_path().transformed(ax.patch.get_transform())
+                for text in labels:
+                    if not boundary.contains_points(text.get_window_extent().corners()).all():
+                        text.set_visible(False)
             if label.background_color is not None:
                 for text in labels:
                     text.set_bbox(dict(facecolor=label.background_color, edgecolor="none", pad=.5))
@@ -2190,9 +2201,11 @@ def _apply_axis_spec(
     ax: Any,
     axis: AxisSpec,
     *,
+    tick_fontsize: float,
     map_axis: bool = False,
     tick_crs: Any = None,
 ) -> None:
+    ax.tick_params(labelsize=tick_fontsize)
     if axis.xticks is not None:
         if map_axis:
             ax.set_xticks(axis.xticks, crs=tick_crs)
@@ -2223,12 +2236,17 @@ def _apply_axis_spec(
         if map_axis:
             from matplotlib.ticker import FixedLocator
 
+            sides = isinstance(grid.labels, Mapping)
             gridliner = ax.gridlines(
-                draw_labels=grid.labels,
+                draw_labels=dict(grid.labels) if sides else grid.labels,
+                auto_inline=not sides,
                 color=grid.color,
                 linewidth=grid.linewidth,
                 alpha=grid.alpha,
             )
+            if grid.labels:
+                gridliner.xlabel_style["size"] = tick_fontsize
+                gridliner.ylabel_style["size"] = tick_fontsize
             if grid.xlocators is not None:
                 gridliner.xlocator = FixedLocator(grid.xlocators)
             if grid.ylocators is not None:
@@ -2245,8 +2263,8 @@ def _apply_axis_spec(
             if grid.ylocators is not None:
                 ax.set_yticks(grid.ylocators, minor=True)
     border = axis.border
-    for spine in ax.spines.values():
-        spine.set_visible(border.enabled)
+    for name, spine in ax.spines.items():
+        spine.set_visible(border.enabled and (not map_axis or name == "geo"))
         spine.set_color(border.color)
         spine.set_linewidth(border.linewidth)
 
@@ -2341,12 +2359,13 @@ def _render_basemap(ax: Any, subplot_spec: SubplotSpec) -> None:
         # LambertConformal used by EuropeAsia needs a rectangular clipping
         # path. PlateCarree keeps Cartopy's normal extent boundary.
         xmin, xmax, ymin, ymax = domain.extent
-        resolution = 1
+        longitudes = np.linspace(xmin, xmax, math.ceil(xmax - xmin) + 1)
+        latitudes = np.linspace(ymin, ymax, math.ceil(ymax - ymin) + 1)
         vertices = (
-            [(longitude, ymin) for longitude in np.arange(xmin, xmax + 1, resolution)]
-            + [(xmax, latitude) for latitude in np.arange(ymin, ymax + 1, resolution)]
-            + [(longitude, ymax) for longitude in np.arange(xmax, xmin - 1, -resolution)]
-            + [(xmin, latitude) for latitude in np.arange(ymax, ymin - 1, -resolution)]
+            [(longitude, ymin) for longitude in longitudes]
+            + [(xmax, latitude) for latitude in latitudes[1:]]
+            + [(longitude, ymax) for longitude in longitudes[-2::-1]]
+            + [(xmin, latitude) for latitude in latitudes[-2::-1]]
         )
         path = mpath.Path(vertices)
         projection_transform = domain.extent_crs._as_mpl_transform(ax) - ax.transData
@@ -2462,7 +2481,6 @@ def _create_subplots(
                     path=("charts", chart.id, "subplots", subplot_id, "kind"),
                 )
             ax.set_facecolor(spec.theme.axes_facecolor)
-            ax.tick_params(labelsize=spec.theme.tick_fontsize)
             if map_axis:
                 # Establish the map extent before applying aspect correction.
                 # Child axes are positioned from this final parent box below.
@@ -2470,6 +2488,7 @@ def _create_subplots(
             _apply_axis_spec(
                 ax,
                 subplot_spec.axis,
+                tick_fontsize=spec.theme.tick_fontsize,
                 map_axis=map_axis,
                 tick_crs=(subplot_spec.domain.extent_crs if map_axis else None),
             )

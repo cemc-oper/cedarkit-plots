@@ -59,7 +59,10 @@ def save(panel, output, name, basemap):
                     box_pixels(ax.bbox) for ax in figure.axes if ax not in axes.values()
                 ],
                 "figure_text": [item.get_text() for item in figure.texts],
-                "axes_text": {key: [item.get_text() for item in ax.texts] for key, ax in axes.items()},
+                "axes_text": {
+                    key: [item.get_text() for item in ax.texts if item.get_visible()]
+                    for key, ax in axes.items()
+                },
             }
 
 
@@ -74,6 +77,7 @@ def synthetic_cases():
     )
     height = temperature.copy(data=5700 + 600 * np.sin(lat) + 120 * np.sin(4 * lon))
     height.attrs = {"units": "gpm"}
+    height = height.sel(longitude=slice(20, 170), latitude=slice(0, 70))
     national = east_asia_temperature_field(
         coords=(np.arange(70, 141), np.arange(0, 61))
     )

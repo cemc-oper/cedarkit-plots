@@ -16,7 +16,7 @@ The script holds the inputs, styles and PNG export options fixed. Each output di
 | --- | --- |
 | `east_asia` | `cn.t2m` on CMA-GFS 2026-11-02 12 UTC +6 h, `cn_summer`, with and without an inset through `render_result`. The R05-01 CLI image is the original comparison. |
 | `cn_area` | Fixed 2 m temperature in °C, nationwide with a South China Sea inset and North China without one. |
-| `europe_asia` | Fixed temperature in °C and height isolines in gpm, with and without an inset. |
+| `europe_asia` | Fixed temperature in °C and height isolines in gpm within 20–170°E and 0–70°N, with and without an inset. |
 | `global_map` | Periodic temperature field on a 2° global grid, including equal samples at ±180°. |
 | `global_area` | The same field, also plotted for 20°E–150°E, 20°S–60°N. |
 | `north_polar` | The same field on two canvas shapes. |

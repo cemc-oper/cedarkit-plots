@@ -446,7 +446,7 @@ class GridlineSpec:
     color: str = field(default=UNSET)
     linewidth: float = field(default=UNSET)
     alpha: float = field(default=UNSET)
-    labels: bool = field(default=UNSET)
+    labels: bool | Mapping[str, str | bool] = field(default=UNSET)
 
     def __post_init__(self) -> None:
         for name in ("xlocators", "ylocators"):
@@ -462,7 +462,15 @@ class GridlineSpec:
             if self.alpha > 1:
                 _fail("alpha must be no greater than 1", path=("alpha",))
         if _is_declared(self.labels):
-            _check_bool(self.labels, "labels")
+            if isinstance(self.labels, Mapping):
+                for side, axis in self.labels.items():
+                    if side not in {"left", "right", "top", "bottom", "geo"} or (
+                        not isinstance(axis, bool) and axis not in ("x", "y")
+                    ):
+                        _fail("gridline labels require a valid side and x, y or a boolean", path=("labels",))
+                object.__setattr__(self, "labels", _mapping(self.labels, "labels"))
+            else:
+                _check_bool(self.labels, "labels")
 
 
 @dataclass(frozen=True, kw_only=True, slots=True)

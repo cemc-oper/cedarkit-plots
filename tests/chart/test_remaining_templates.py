@@ -76,7 +76,8 @@ def test_remaining_map_factories_preserve_domain_projection_and_features():
     assert europe.subplots["main"].domain == EUROPE_ASIA_DOMAIN
     assert isinstance(europe.subplots["main"].map_crs, ccrs.LambertConformal)
     assert europe.subplots["main"].axis.xticks is None
-    assert europe.subplots["main"].axis.gridlines.xlocators == tuple(float(value) for value in range(20, 170, 10))
+    assert europe.subplots["main"].axis.gridlines.xlocators == tuple(float(value) for value in range(20, 170, 15))
+    assert europe.subplots["main"].axis.gridlines.labels
 
     global_default = global_chart()
     assert global_default.subplots["main"].domain == GLOBAL_DOMAIN

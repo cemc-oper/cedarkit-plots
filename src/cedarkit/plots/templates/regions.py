@@ -48,21 +48,18 @@ from cedarkit.plots.types import AreaRange
 from . import ChartTemplate, PanelTemplate
 
 
-_EAST_ASIA_POSITION = Rect(space="chart", bounds=(.125, .2, .75, .6))
 _CN_AREA_POSITION = Rect(space="chart", bounds=(.02, .04, .93, .9))
-_EUROPE_ASIA_POSITION = _EAST_ASIA_POSITION
+_EUROPE_ASIA_POSITION = Rect(space="chart", bounds=(.025, .075, .91, .85))
 _GLOBAL_POSITION = Rect(space="chart", bounds=(.1, .2, .8, .6))
 _NORTH_POLAR_POSITION = Rect(space="chart", bounds=(.125, .1, .75, .8))
 # Keep each colorbar in a dedicated strip outside the matching map rectangle.
-_EUROPE_ASIA_COLORBAR = Rect(space="chart", bounds=(.895, .24, .025, .52))
 _GLOBAL_COLORBAR = Rect(space="chart", bounds=(.92, .2, .025, .6))
 _NORTH_POLAR_COLORBAR = Rect(space="chart", bounds=(.93, .2, .025, .6))
 _INSET_POSITION = Rect(
     space="subplot",
     subplot="main",
-    bounds=(0.0, 0.0, .1 / .75, .14 / .6),
+    bounds=(0.0, 0.0, .14, .26),
 )
-_CN_INSET_POSITION = Rect(space="subplot", subplot="main", bounds=(0, 0, .14, .26))
 _REGIONAL_MAP_INFO = MapInfo(text="No:GS (2019) 1786", x=.998, y=.0022)
 
 def _invalid(message: str, name: str) -> None:
@@ -254,8 +251,8 @@ def _inset_axis() -> AxisSpec:
     ticks_x = (110, 120)
     ticks_y = (10, 20)
     return AxisSpec(
-        xticks=ticks_x,
-        yticks=ticks_y,
+        xticks=(),
+        yticks=(),
         gridlines=GridlineSpec(
             xlocators=ticks_x,
             ylocators=ticks_y,
@@ -323,12 +320,10 @@ def cn_area_chart(
             kind="map",
             domain=SOUTH_CHINA_SEA_DOMAIN,
             map_crs=ccrs.PlateCarree(),
-            position=_CN_INSET_POSITION,
+            position=_INSET_POSITION,
             aspect="equal",
             anchor="SW",
-            axis=AxisSpec(xticks=(), yticks=(), gridlines=GridlineSpec(
-                xlocators=(110, 120), ylocators=(10, 20), linewidth=.2,
-            )),
+            axis=_inset_axis(),
             basemap=sub_basemap,
         )
     return ChartTemplate(subplots=subplots)
@@ -383,19 +378,23 @@ def europe_asia_chart(
         main_basemap = _china_basemap(main_map_info)
     if with_inset and sub_basemap is None:
         sub_basemap = _south_basemap(sub_map_info)
-    xlocators = _ticks(domain.extent[0], domain.extent[1], 10, include_end=False)
-    ylocators = _ticks(domain.extent[2], domain.extent[3], 5, include_end=False)
+    xlocators = _ticks(domain.extent[0], domain.extent[1], 15, include_end=False)
+    ylocators = _ticks(domain.extent[2], domain.extent[3], 10, include_end=False)
     subplots: dict[str, SubplotSpec] = {
         "main": SubplotSpec(
             kind="map",
             domain=domain,
             map_crs=domain.map_crs,
             position=_EUROPE_ASIA_POSITION,
-            aspect="auto",
+            aspect="equal",
             axis=AxisSpec(
                 xticks=None,
                 yticks=None,
-                gridlines=GridlineSpec(xlocators=xlocators, ylocators=ylocators),
+                gridlines=GridlineSpec(
+                    xlocators=xlocators, ylocators=ylocators,
+                    linewidth=.35, alpha=.55,
+                    labels={"geo": True, "left": "y", "right": "y", "bottom": "x", "top": "y"},
+                ),
             ),
             basemap=main_basemap,
         ),
@@ -406,16 +405,12 @@ def europe_asia_chart(
             domain=SOUTH_CHINA_SEA_DOMAIN,
             map_crs=ccrs.PlateCarree(),
             position=_INSET_POSITION,
-            aspect=.1 / .14,
+            aspect="equal",
+            anchor="SW",
             axis=_inset_axis(),
             basemap=sub_basemap,
         )
-    return ChartTemplate(
-        subplots=subplots,
-        decorations=DecorationSpec(
-            colorbars={"*": ColorbarSpec(position=_EUROPE_ASIA_COLORBAR)},
-        ),
-    )
+    return ChartTemplate(subplots=subplots)
 
 
 def europe_asia(
