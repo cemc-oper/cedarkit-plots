@@ -29,7 +29,7 @@ from . import ChartTemplate, PanelTemplate
 _DEFAULT_COLORBAR_ID = "ens_cn_colorbar"
 _DEFAULT_COLORBAR_POSITION = Rect(
     space="figure",
-    bounds=(.92, .15, .02, .7),
+    bounds=(.885, .09, .014, .72),
 )
 
 
@@ -143,10 +143,12 @@ def ens_cn_chart(
             "main": SubplotSpec(
                 kind="map",
                 domain=domain,
-                aspect="auto",
+                position=Rect(space="chart", bounds=(.03, .025, .94, .88)),
+                aspect="equal",
                 basemap=basemap,
             ),
         },
+        theme=Theme(title_fontsize=9),
     )
 
 
@@ -225,7 +227,8 @@ def ens_cn_layout(
     elif control_role is not None:
         order.append(ChartSelector(role=control_role, required=require_control))
     if max_id is not None:
-        placements[max_id] = max_position or Cell(row=0, column=1)
+        default_max_position = Cell(row=0, column=1) if columns > 1 else Cell(row=1, column=0)
+        placements[max_id] = max_position or default_max_position
         order.append(ChartSelector(id=max_id, required=True))
     elif max_role is not None:
         order.append(ChartSelector(role=max_role, required=require_max))
@@ -270,6 +273,9 @@ def ens_cn_layout(
     return LayoutSpec(
         rows=rows,
         columns=columns,
+        margins=(.045, .15, .075, .18),
+        wspace=.10,
+        hspace=.17,
         placements=placements,
         order=tuple(order),
         slots=slots,
@@ -341,7 +347,7 @@ def ens_cn(
         )
     return PanelTemplate(
         layout=layout,
-        theme=Theme(),
+        theme=Theme(title_fontsize=13),
         chart_defaults=ens_cn_chart(domain=domain, basemap=basemap),
         decorations=decorations,
     )
