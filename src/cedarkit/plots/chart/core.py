@@ -2338,6 +2338,16 @@ def _map_info_values(value: Any) -> tuple[str, float, float]:
     return text, float(x), float(y)
 
 
+def _set_circular_boundary(ax: Any, radius: float) -> None:
+    theta = np.linspace(0, 2 * np.pi, 181)
+    width, height = ax.bbox.width, ax.bbox.height
+    # Use the final axes dimensions so the boundary stays physically circular.
+    radius_x = radius * min(1.0, height / width)
+    radius_y = radius * min(1.0, width / height)
+    vertices = np.column_stack((.5 + np.cos(theta) * radius_x, .5 + np.sin(theta) * radius_y))
+    ax.set_boundary(mpath.Path(vertices), transform=ax.transAxes)
+
+
 def _render_basemap(ax: Any, subplot_spec: SubplotSpec) -> None:
     basemap = subplot_spec.basemap
     domain = subplot_spec.domain
@@ -2354,20 +2364,7 @@ def _render_basemap(ax: Any, subplot_spec: SubplotSpec) -> None:
         ax.set_global()
     else:
         ax.set_extent(domain.extent, crs=domain.extent_crs)
-    if boundary == "circle":
-        theta = np.linspace(0, 2 * np.pi, 100)
-        center = np.array([0.5, 0.5])
-        width, height = ax.bbox.width, ax.bbox.height
-        radius = domain.boundary_radius
-        # Keep the boundary physically circular when the axes frame is wider
-        # or taller than a square. The radius is measured against the shorter
-        # side, leaving a consistent band for meridian labels.
-        radius_x = radius * min(1.0, height / width)
-        radius_y = radius * min(1.0, width / height)
-        vertices = np.column_stack((np.cos(theta) * radius_x, np.sin(theta) * radius_y))
-        circle = mpath.Path(vertices + center)
-        ax.set_boundary(circle, transform=ax.transAxes)
-    elif boundary == "extent" and not isinstance(map_crs, ccrs.PlateCarree):
+    if boundary == "extent" and not isinstance(map_crs, ccrs.PlateCarree):
         # LambertConformal used by EuropeAsia needs a rectangular clipping
         # path. PlateCarree keeps Cartopy's normal extent boundary.
         xmin, xmax, ymin, ymax = domain.extent
@@ -2508,6 +2505,8 @@ def _create_subplots(
             ax.set_zorder(subplot_spec.zorder)
             ax.apply_aspect()
             if map_axis:
+                if subplot_spec.domain.boundary == "circle":
+                    _set_circular_boundary(ax, subplot_spec.domain.boundary_radius)
                 result[subplot_id] = MapSubplot(
                     chart,
                     subplot_id,

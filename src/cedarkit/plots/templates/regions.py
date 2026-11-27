@@ -18,7 +18,6 @@ from cedarkit.plots.config import (
     AnnotationSpec,
     AxisSpec,
     BasemapSpec,
-    ColorbarSpec,
     DecorationSpec,
     GridlineSpec,
     LayoutSpec,
@@ -52,9 +51,7 @@ from . import ChartTemplate, PanelTemplate
 _CN_AREA_POSITION = Rect(space="chart", bounds=(.02, .04, .93, .9))
 _EUROPE_ASIA_POSITION = Rect(space="chart", bounds=(.025, .075, .91, .85))
 _GLOBAL_POSITION = Rect(space="chart", bounds=(.025, .07, .91, .86))
-_NORTH_POLAR_POSITION = Rect(space="chart", bounds=(.125, .1, .75, .8))
-# Keep each colorbar in a dedicated strip outside the matching map rectangle.
-_NORTH_POLAR_COLORBAR = Rect(space="chart", bounds=(.93, .2, .025, .6))
+_NORTH_POLAR_POSITION = Rect(space="chart", bounds=(.03, .065, .9, .88))
 _INSET_POSITION = Rect(
     space="subplot",
     subplot="main",
@@ -618,8 +615,8 @@ def north_polar_chart(
         basemap = _china_basemap(map_info)
 
     labels: dict[str, AnnotationSpec] = {}
-    east_labels = ["0"] + [f"{value}E" for value in range(30, 180, 30)] + ["180"]
-    west_labels = [f"{value}W" for value in range(30, 180, 30)]
+    east_labels = ["0°"] + [f"{value}°E" for value in range(30, 180, 30)] + ["180°"]
+    west_labels = [f"{value}°W" for value in range(30, 180, 30)]
     labels_for_longitude = east_labels + west_labels[::-1]
     for longitude, label in zip(range(0, 360, 30), labels_for_longitude):
         labels[f"longitude_{longitude}"] = AnnotationSpec(
@@ -628,13 +625,12 @@ def north_polar_chart(
             position=TextPosition(
                 space="subplot",
                 subplot="main",
-                # Latitude 1.5 keeps the labels in the annular margin between
-                # the inset circular boundary and the axes frame.
-                xy=(longitude, 1.5),
+                xy=(longitude, domain.extent[2] + 8.5),
                 ha="center",
                 va="center",
             ),
             fontsize=8,
+            bbox={"facecolor": "white", "edgecolor": "none", "alpha": .8, "pad": .75},
         )
 
     xlocators = tuple(float(value) for value in np.arange(-180, 180, 30))
@@ -646,23 +642,22 @@ def north_polar_chart(
                 domain=domain,
                 map_crs=domain.map_crs,
                 position=_NORTH_POLAR_POSITION,
-                aspect="auto",
+                aspect="equal",
                 axis=AxisSpec(
                     xticks=None,
                     yticks=None,
                     gridlines=GridlineSpec(
                         xlocators=xlocators,
                         ylocators=ylocators,
-                        color="k",
+                        color="#3f4851",
+                        linewidth=.45,
+                        alpha=.6,
                     ),
                 ),
                 basemap=basemap,
                 annotations=labels,
             ),
         },
-        decorations=DecorationSpec(
-            colorbars={"*": ColorbarSpec(position=_NORTH_POLAR_COLORBAR)},
-        ),
     )
 
 

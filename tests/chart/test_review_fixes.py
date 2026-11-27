@@ -151,14 +151,17 @@ def test_geographic_polar_annotations_follow_template_positions_after_resize_and
                 ax = chart.main.ax
                 labels = {text.get_text(): text for text in ax.texts}
                 assert len(labels) == 12
+                assert {"0°", "180°", "30°E", "30°W"} <= labels.keys()
+                boundary = ax.patch.get_path().get_extents(ax.patch.get_transform())
+                assert boundary.width == pytest.approx(boundary.height, abs=.02)
                 points = []
                 for longitude, annotation in template.chart_defaults.subplots["main"].annotations.items():
                     artist = labels[annotation.text]
                     lon = int(longitude.removeprefix("longitude_"))
-                    assert annotation.position.xy == (lon, 1.5)
+                    assert annotation.position.xy == (lon, 8.5)
                     assert annotation.position.va == "center"
                     expected = ax.transData.transform(
-                        ax.projection.transform_point(lon, 1.5, ccrs.Geodetic())
+                        ax.projection.transform_point(lon, 8.5, ccrs.Geodetic())
                     )
                     actual = artist.get_transform().transform(artist.get_position())
                     np.testing.assert_allclose(actual, expected, atol=1e-7)
