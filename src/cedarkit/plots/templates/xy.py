@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from math import ceil
 from typing import Any
 
 import numpy as np
+import pandas as pd
 
 from cedarkit.plots.config import (
     AxisSpec,
@@ -14,8 +16,10 @@ from cedarkit.plots.config import (
     LayoutSpec,
     Rect,
     SubplotSpec,
+    TextPosition,
     Theme,
     TimeStepFormatter,
+    TitleSpec,
 )
 from cedarkit.plots.errors import ConfigError
 
@@ -136,19 +140,43 @@ def time_profile_chart(
     levels: Sequence[float],
     start_time: Any,
 ) -> ChartTemplate:
-    """Return the D01 time-step/level XY configuration.
-
-    Tick labels retain the old behavior: every 00Z tick includes the day and
-    month, and the final step additionally includes the year.
-    """
+    """Lay out forecast time in UTC and pressure decreasing upwards."""
 
     steps = _sequence(steps, "steps")
     levels = _sequence(levels, "levels")
-    xticks = tuple(float(value) for value in np.arange(0, steps[-1] + 1, 12))
-    return xy_chart(
+    start = pd.Timestamp(start_time)
+    if pd.isna(start):
+        raise ConfigError("start_time must be a valid timestamp", code="invalid_template", path=("start_time",))
+    start = start.tz_localize("UTC") if start.tzinfo is None else start.tz_convert("UTC")
+    first, last = min(steps), max(steps)
+    span = last - first
+    frequency = pd.Timedelta(hours=max(12, 12 * ceil(span / 120)))
+    begin = start + pd.Timedelta(hours=first)
+    end = start + pd.Timedelta(hours=last)
+    regular = (pd.date_range(begin.ceil(frequency), end.floor(frequency), freq=frequency) - start)
+    # The endpoint labels include dates and need more horizontal space.
+    gap = min(6, span / 14)
+    xticks = tuple(sorted({first, last, *(
+        step for step in regular / pd.Timedelta(hours=1) if first + gap < step < last - gap
+    )}))
+    low, high = min(levels), max(levels)
+    chart = xy_chart(
+        xlim=(first, last) if first != last else None,
+        ylim=(low, high) if low != high else None,
         xticks=xticks,
         yticks=levels,
-        xformatter=TimeStepFormatter(start_time=start_time, last_step=steps[-1]),
+        xlabel="Valid time (UTC)",
+        ylabel="Pressure (hPa)",
+        invert_y=True,
+        xformatter=TimeStepFormatter(start_time=start, last_step=last),
+        gridlines=GridlineSpec(color="#75808a", linewidth=.35, alpha=.4),
+    )
+    return ChartTemplate(
+        subplots=chart.subplots,
+        decorations=DecorationSpec(titles={
+            "title": TitleSpec(position=TextPosition(space="subplot", xy=(0, 1.025), ha="left", va="bottom")),
+            "init": TitleSpec(position=TextPosition(space="subplot", xy=(1, 1.025), ha="right", va="bottom"), fontsize=10),
+        }),
     )
 
 
@@ -160,7 +188,7 @@ def time_profile(
     """Return a one-Chart Panel preset for :func:`time_profile_chart`."""
 
     return PanelTemplate(
-        layout=LayoutSpec(rows=1, columns=1, expected_charts=1),
+        layout=LayoutSpec(rows=1, columns=1, figsize=(9.4, 5.8), expected_charts=1),
         theme=Theme(),
         chart_defaults=time_profile_chart(steps, levels, start_time),
         decorations=DecorationSpec(),

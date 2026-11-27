@@ -2292,10 +2292,14 @@ def _axis_formatter(value: str | TimeStepFormatter, *, map_axis: bool, longitude
     if isinstance(value, TimeStepFormatter):
         def format_time(step: float, _position: int) -> str:
             valid_time = value.start_time + timedelta(hours=float(step))
-            label = valid_time.strftime("%HZ")
-            if label == "00Z":
+            clock = "%HZ"
+            if valid_time.minute or valid_time.second:
+                clock = "%H:%M:%SZ" if valid_time.second else "%H:%MZ"
+            label = valid_time.strftime(clock)
+            is_last = math.isclose(float(step), value.last_step)
+            if label == "00Z" or is_last:
                 label += f"\n{valid_time.strftime('%d%b').upper()}"
-            if math.isclose(float(step), value.last_step):
+            if is_last:
                 label += f"\n{valid_time.strftime('%Y')}"
             return label
 

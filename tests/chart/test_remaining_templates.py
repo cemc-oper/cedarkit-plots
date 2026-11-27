@@ -188,6 +188,23 @@ def test_xy_keeps_explicit_limits_ticks_and_inverted_axis():
         assert (ax.get_xlabel(), ax.get_ylabel()) == ("Lead time (h)", "Pressure (hPa)")
 
 
+def test_time_profile_labels_utc_midnight_and_non_aligned_endpoint():
+    template = time_profile([0, 6, 18, 24.5], [1000, 850, 700, 500], "2026-11-03T02:00+08:00")
+    with Panel(template=template) as panel:
+        chart = panel.add_chart()
+        chart.set_title("Beijing")
+        chart.set_title("Init 2026-11-02 18 UTC", id="init")
+        panel.render()
+        ax = chart.main.ax
+        assert ax.get_xlim() == (0, 24.5)
+        assert ax.get_ylim() == (1000, 500)
+        assert [label.get_text() for label in ax.get_xticklabels()] == [
+            "18Z", "00Z\n03NOV", "12Z", "18:30Z\n03NOV\n2026",
+        ]
+        assert ax.get_ylabel() == "Pressure (hPa)"
+        assert [title.get_ha() for title in ax.texts] == ["left", "right"]
+
+
 @pytest.mark.parametrize("area", [(20, 150, -20, 60), (230, 280, 10, 50)])
 def test_global_area_respects_selected_region_and_draws_dense_grid(area):
     full = global_area_chart().subplots["main"]
