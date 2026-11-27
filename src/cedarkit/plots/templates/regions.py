@@ -38,6 +38,7 @@ from cedarkit.plots.domains.east_asia_config import (
 from cedarkit.plots.domains.remaining_config import (
     CN_AREA_DOMAIN,
     EUROPE_ASIA_DOMAIN,
+    GLOBAL_CENTRAL_LONGITUDE,
     GLOBAL_DOMAIN,
     NORTH_POLAR_DOMAIN,
 )
@@ -111,11 +112,22 @@ def _domain_from_area(
         extent = tuple(area)
     else:
         _invalid("area must be AreaRange or a four-item sequence", "area")
+    boundary = default.boundary
+    map_crs = default.map_crs
+    if boundary == "global":
+        west, east, south, north = extent
+        width = east - west
+        if width < 360 or south > -90 or north < 90:
+            boundary = "extent"
+            center = (west + east) / 2
+            offset = (center - GLOBAL_CENTRAL_LONGITUDE + 180) % 360 - 180
+            if abs(offset) + width / 2 >= 180:
+                map_crs = ccrs.PlateCarree(central_longitude=center % 360)
     return Domain(
         extent=extent,
         extent_crs=default.extent_crs,
-        map_crs=default.map_crs,
-        boundary=default.boundary,
+        map_crs=map_crs,
+        boundary=boundary,
         boundary_radius=default.boundary_radius,
         view_padding=default.view_padding,
     )
@@ -134,7 +146,7 @@ def _ticks(start: float, end: float, step: float, *, include_end: bool) -> tuple
 
 
 def _global_ticks(interval: float) -> tuple[float, ...]:
-    central_longitude = 80
+    central_longitude = GLOBAL_CENTRAL_LONGITUDE
     east = np.arange(central_longitude, central_longitude + 180, interval)
     west = np.arange(
         central_longitude - interval,
@@ -145,6 +157,12 @@ def _global_ticks(interval: float) -> tuple[float, ...]:
     ticks = np.where(ticks > 180, ticks - 360, ticks)
     ticks = np.where(ticks < -180, ticks + 360, ticks)
     return tuple(float(value) for value in np.unique(ticks))
+
+
+def _aligned_ticks(start: float, end: float, interval: float) -> tuple[float, ...]:
+    if end - start < 2 * interval:
+        return _regional_ticks(start, end)
+    return tuple(float(value) for value in np.arange(np.ceil(start / interval) * interval, end + 1e-8, interval))
 
 
 def _china_basemap(map_info: MapInfo | None, *, with_lakes: bool = True) -> BasemapSpec:
@@ -220,7 +238,9 @@ def _global_basemap(
         ),
     ]
     if with_global_borders:
-        features.append(MapFeatureSpec(name="global_borders"))
+        features.append(MapFeatureSpec(name="global_borders", style={
+            "linewidth": .4, "edgecolor": "#3e4247",
+        }))
     return BasemapSpec(
         map_type=MapType.Global if with_global_borders else MapType.Portrait,
         features=tuple(features),
@@ -470,8 +490,15 @@ def _global_chart(
     )
     if basemap is None:
         basemap = _global_basemap(map_info, with_global_borders=with_global_borders)
-    ticks_x = _global_ticks(interval)
-    ticks_y = tuple(float(value) for value in np.arange(-90 + interval, 90, interval))
+    if domain.boundary == "global":
+        grid_x = _global_ticks(interval)
+        ticks_x = _global_ticks(20) if with_global_borders else grid_x
+        ticks_y = tuple(float(value) for value in np.arange(-90 + interval, 90, interval))
+    else:
+        west, east, south, north = domain.extent
+        ticks_x = _aligned_ticks(west, east, interval)
+        ticks_y = _aligned_ticks(south, north, interval)
+        grid_x = tuple((value + 180) % 360 - 180 for value in ticks_x)
     return ChartTemplate(
         subplots={
             "main": SubplotSpec(
@@ -486,10 +513,10 @@ def _global_chart(
                     xformatter="longitude",
                     yformatter="latitude",
                     gridlines=GridlineSpec(
-                        xlocators=ticks_x,
+                        xlocators=grid_x,
                         ylocators=ticks_y,
-                        linewidth=.35,
-                        alpha=.55,
+                        linewidth=.25 if with_global_borders else .35,
+                        alpha=.45 if with_global_borders else .55,
                     ),
                 ),
                 basemap=basemap,
@@ -555,7 +582,7 @@ def global_map(**kwargs: Any) -> PanelTemplate:
 def global_area(**kwargs: Any) -> PanelTemplate:
     """Return a one-Chart Panel preset for :func:`global_area_chart`."""
 
-    return _panel_template(global_area_chart(**kwargs), figsize=(12.0, 8.0))
+    return _panel_template(global_area_chart(**kwargs), figsize=(12.0, 6.5))
 
 
 def north_polar_chart(

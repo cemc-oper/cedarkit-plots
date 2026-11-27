@@ -2299,7 +2299,7 @@ def _axis_formatter(value: str | TimeStepFormatter, *, map_axis: bool, longitude
     if map_axis and value == "longitude":
         from cartopy.mpl.ticker import LongitudeFormatter
 
-        return LongitudeFormatter(zero_direction_label=True, degree_symbol="")
+        return LongitudeFormatter(degree_symbol="")
     if map_axis and value == "latitude":
         from cartopy.mpl.ticker import LatitudeFormatter
 

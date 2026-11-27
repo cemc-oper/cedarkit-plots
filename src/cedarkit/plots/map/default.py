@@ -125,7 +125,9 @@ class DefaultMapLoader(MapLoader):
         return get_china_nine_map()
 
     def global_borders(self) -> List[cfeature.Feature]:
-        return list()
+        if self.map_type is MapType.Global:
+            return [cfeature.BORDERS.with_scale(self.default_scale)]
+        return []
 
     def _load_china_shapefile(self, shapefile_name: str) -> List[cfeature.Feature]:
         """

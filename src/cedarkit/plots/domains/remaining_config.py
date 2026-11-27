@@ -38,10 +38,12 @@ GLOBAL_AREA = AreaRange(
     start_latitude=-90,
     end_latitude=90,
 )
+GLOBAL_CENTRAL_LONGITUDE = 80
+
 GLOBAL_DOMAIN = Domain(
     extent=GLOBAL_AREA.to_tuple(),
     extent_crs=ccrs.PlateCarree(),
-    map_crs=ccrs.PlateCarree(central_longitude=80),
+    map_crs=ccrs.PlateCarree(central_longitude=GLOBAL_CENTRAL_LONGITUDE),
     boundary="global",
 )
 

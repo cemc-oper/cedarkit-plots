@@ -22,6 +22,7 @@ from cedarkit.plots.domains import (
     NORTH_POLAR_DOMAIN,
 )
 from cedarkit.plots.map import MapLoader, MapType
+from cedarkit.plots.map.default import DefaultMapLoader
 from cedarkit.plots.style import ContourStyle
 from cedarkit.plots.templates import (
     cn_area,
@@ -170,6 +171,24 @@ def test_global_chart_accepts_direct_custom_basemap():
     custom = empty_basemap()
     preset = global_chart(main_basemap=custom, map_info=None)
     assert preset.subplots["main"].basemap == custom
+
+
+@pytest.mark.parametrize("area", [(20, 150, -20, 60), (230, 280, 10, 50)])
+def test_global_area_respects_selected_region_and_draws_dense_grid(area):
+    full = global_area_chart().subplots["main"]
+    assert len(full.axis.gridlines.xlocators) == 35
+    assert len(full.axis.xticks) == 17
+    border, = DefaultMapLoader(map_type=MapType.Global).global_borders()
+    assert (border.name, border.scale) == ("admin_0_boundary_lines_land", "50m")
+    with Panel(template=global_area(area=area, basemap=empty_basemap())) as panel:
+        chart = panel.add_chart()
+        panel.render()
+        ax = chart.main.ax
+        west, east, south, north = area
+        assert np.ptp(ax.get_xlim()) == pytest.approx(east - west)
+        assert ax.get_ylim() == pytest.approx((south, north))
+        settings = panel.effective_config.charts[chart.id].subplots["main"]
+        assert all(west <= tick <= east for tick in settings.axis.xticks)
 
 
 @pytest.mark.parametrize("longitude", [np.arange(-180, 180, 15), np.arange(345, -1, -15)])
