@@ -13,6 +13,7 @@ from typing import Any
 
 import cartopy.crs as ccrs
 from cartopy.mpl.gridliner import Gridliner
+from cartopy.util import add_cyclic_point
 import matplotlib.path as mpath
 import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
@@ -1140,12 +1141,18 @@ class Panel:
                                 code="missing_target",
                                 path=("charts", chart.id, "subplots", target),
                             ) from exc
-                        _validate_coverage(layer, spec.subplots[target], prepared[layer], target)
+                        subplot_spec = spec.subplots[target]
+                        _validate_coverage(layer, subplot_spec, prepared[layer], target)
+                        map_axis = subplot_spec.kind == "map"
                         artist, mappable = _draw_layer(
                             ax,
                             layer,
-                            map_axis=spec.subplots[target].kind == "map",
+                            map_axis=map_axis,
                             data_crs=layer.data_crs,
+                            cyclic_longitude=(
+                                map_axis and subplot_spec.domain.boundary == "global"
+                                and isinstance(layer.data_crs, ccrs.PlateCarree)
+                            ),
                             style=resolved_styles[layer],
                             prepared=prepared[layer],
                         )
@@ -1947,6 +1954,7 @@ def _draw_layer(
     *,
     map_axis: bool = False,
     data_crs: Any = None,
+    cyclic_longitude: bool = False,
     style: Style | None = None,
     prepared: Any = None,
 ) -> tuple[Artist, Any]:
@@ -1956,6 +1964,10 @@ def _draw_layer(
     transform = {"transform": data_crs} if map_axis else {}
     if layer.method in {"contourf", "contour"}:
         x, y, values = prepared
+        if cyclic_longitude and x.size > 1:
+            spacing = np.diff(x)
+            if np.allclose(spacing, spacing[0]) and np.isclose(abs(spacing[0]) * x.size, 360):
+                values, x = add_cyclic_point(values, coord=x)
         _validate_color_count(style, layer.method, layer.id)
         kwargs: dict[str, Any] = {"zorder": layer.zorder, **transform}
         if style.levels is not None:

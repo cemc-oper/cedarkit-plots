@@ -50,10 +50,9 @@ from . import ChartTemplate, PanelTemplate
 
 _CN_AREA_POSITION = Rect(space="chart", bounds=(.02, .04, .93, .9))
 _EUROPE_ASIA_POSITION = Rect(space="chart", bounds=(.025, .075, .91, .85))
-_GLOBAL_POSITION = Rect(space="chart", bounds=(.1, .2, .8, .6))
+_GLOBAL_POSITION = Rect(space="chart", bounds=(.025, .07, .91, .86))
 _NORTH_POLAR_POSITION = Rect(space="chart", bounds=(.125, .1, .75, .8))
 # Keep each colorbar in a dedicated strip outside the matching map rectangle.
-_GLOBAL_COLORBAR = Rect(space="chart", bounds=(.92, .2, .025, .6))
 _NORTH_POLAR_COLORBAR = Rect(space="chart", bounds=(.93, .2, .025, .6))
 _INSET_POSITION = Rect(
     space="subplot",
@@ -480,7 +479,7 @@ def _global_chart(
                 domain=domain,
                 map_crs=domain.map_crs,
                 position=_GLOBAL_POSITION,
-                aspect="auto",
+                aspect="equal",
                 axis=AxisSpec(
                     xticks=ticks_x,
                     yticks=ticks_y,
@@ -489,14 +488,13 @@ def _global_chart(
                     gridlines=GridlineSpec(
                         xlocators=ticks_x,
                         ylocators=ticks_y,
+                        linewidth=.35,
+                        alpha=.55,
                     ),
                 ),
                 basemap=basemap,
             ),
         },
-        decorations=DecorationSpec(
-            colorbars={"*": ColorbarSpec(position=_GLOBAL_COLORBAR)},
-        ),
     )
 
 
@@ -551,7 +549,7 @@ def global_area_chart(
 def global_map(**kwargs: Any) -> PanelTemplate:
     """Return a one-Chart Panel preset for :func:`global_chart`."""
 
-    return _panel_template(global_chart(**kwargs), figsize=(12.0, 8.0))
+    return _panel_template(global_chart(**kwargs), figsize=(12.0, 6.5))
 
 
 def global_area(**kwargs: Any) -> PanelTemplate:

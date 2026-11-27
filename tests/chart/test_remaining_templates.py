@@ -10,10 +10,11 @@ matplotlib.use("Agg")
 
 import cartopy.crs as ccrs
 import numpy as np
+import pytest
 import xarray as xr
 
 from cedarkit.plots import Panel
-from cedarkit.plots.config import BasemapSpec, TimeStepFormatter, UNSET
+from cedarkit.plots.config import BasemapSpec, LayoutSpec, TimeStepFormatter, UNSET
 from cedarkit.plots.domains import (
     CN_AREA_DOMAIN,
     EUROPE_ASIA_DOMAIN,
@@ -169,3 +170,27 @@ def test_global_chart_accepts_direct_custom_basemap():
     custom = empty_basemap()
     preset = global_chart(main_basemap=custom, map_info=None)
     assert preset.subplots["main"].basemap == custom
+
+
+@pytest.mark.parametrize("longitude", [np.arange(-180, 180, 15), np.arange(345, -1, -15)])
+def test_global_map_keeps_a_continuous_field_on_wide_canvas(longitude):
+    latitude = np.arange(-90, 91, 15)
+    field = xr.DataArray(
+        np.full((latitude.size, longitude.size), .5),
+        dims=("latitude", "longitude"),
+        coords={"latitude": latitude, "longitude": longitude},
+    )
+    data_crs = ccrs.PlateCarree()
+    with Panel(template=global_map(basemap=empty_basemap()), layout=LayoutSpec(figsize=(13, 5))) as panel:
+        chart = panel.add_chart(id="map")
+        chart.contourf(field, style=ContourStyle(levels=(0, 1), colors=("#258ac2",)), data_crs=data_crs)
+        figure = panel.render()
+        ax = chart.main.ax
+        assert ax.bbox.width / ax.bbox.height == pytest.approx(2)
+        assert ax.projection.transform_point(80, 0, data_crs)[0] == pytest.approx(0, abs=1e-8)
+        assert "20E" in {text.get_text() for text in ax.get_xticklabels()}
+        assert "10W" in {text.get_text() for text in ax.get_xticklabels()}
+        image = np.asarray(figure.canvas.buffer_rgba())
+        for sample in (179, -179, 1, -1, -98.5, -101.5):
+            x, y = ax.transData.transform(ax.projection.transform_point(sample, 5, data_crs))
+            np.testing.assert_array_equal(image[image.shape[0] - 1 - int(y), int(x), :3], [37, 138, 194])
