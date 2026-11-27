@@ -11,6 +11,7 @@ from collections.abc import Sequence
 from typing import Any
 
 import cartopy.crs as ccrs
+from matplotlib.ticker import MaxNLocator
 import numpy as np
 
 from cedarkit.plots.config import (
@@ -48,9 +49,9 @@ from . import ChartTemplate, PanelTemplate
 
 
 _EAST_ASIA_POSITION = Rect(space="chart", bounds=(.125, .2, .75, .6))
-_CN_AREA_POSITION = Rect(space="chart", bounds=(.1, .2, .8, .6))
+_CN_AREA_POSITION = Rect(space="chart", bounds=(.02, .04, .93, .9))
 _EUROPE_ASIA_POSITION = _EAST_ASIA_POSITION
-_GLOBAL_POSITION = _CN_AREA_POSITION
+_GLOBAL_POSITION = Rect(space="chart", bounds=(.1, .2, .8, .6))
 _NORTH_POLAR_POSITION = Rect(space="chart", bounds=(.125, .1, .75, .8))
 # Keep each colorbar in a dedicated strip outside the matching map rectangle.
 _EUROPE_ASIA_COLORBAR = Rect(space="chart", bounds=(.895, .24, .025, .52))
@@ -61,6 +62,8 @@ _INSET_POSITION = Rect(
     subplot="main",
     bounds=(0.0, 0.0, .1 / .75, .14 / .6),
 )
+_CN_INSET_POSITION = Rect(space="subplot", subplot="main", bounds=(0, 0, .14, .26))
+_REGIONAL_MAP_INFO = MapInfo(text="No:GS (2019) 1786", x=.998, y=.0022)
 
 def _invalid(message: str, name: str) -> None:
     raise ConfigError(message, code="invalid_template", path=(name,))
@@ -229,13 +232,21 @@ def _global_basemap(
     )
 
 
-def _main_axis(domain: Domain, *, xstep: float, ystep: float) -> AxisSpec:
-    xlocators = _ticks(domain.extent[0], domain.extent[1], xstep, include_end=True)
-    ylocators = _ticks(domain.extent[2], domain.extent[3], ystep, include_end=True)
+def _regional_ticks(start: float, end: float) -> tuple[float, ...]:
+    locator = MaxNLocator(nbins=8, steps=[1, 2, 4, 5, 10])
+    return tuple(float(tick) for tick in locator.tick_values(start, end) if start <= tick <= end)
+
+
+def _main_axis(domain: Domain) -> AxisSpec:
+    west, east, south, north = domain.extent
+    xlocators = _regional_ticks(west, east)
+    ylocators = _regional_ticks(south, north)
     return AxisSpec(
         xticks=xlocators,
         yticks=ylocators,
-        gridlines=GridlineSpec(xlocators=xlocators, ylocators=ylocators),
+        xformatter="longitude",
+        yformatter="latitude",
+        gridlines=GridlineSpec(xlocators=xlocators, ylocators=ylocators, linewidth=.35, alpha=.45),
     )
 
 
@@ -288,7 +299,9 @@ def cn_area_chart(
     with_inset = _with_sub_area(with_inset, with_sub_area)
     main_basemap = _require_basemap(main_basemap, "main_basemap")
     sub_basemap = _require_basemap(sub_basemap, "sub_basemap")
-    main_map_info = _require_map_info(main_map_info, "main_map_info") or EAST_ASIA_MAP_INFO
+    main_map_info = _require_map_info(main_map_info, "main_map_info")
+    if main_map_info is None:
+        main_map_info = EAST_ASIA_MAP_INFO if domain.extent == CN_AREA_DOMAIN.extent else _REGIONAL_MAP_INFO
     sub_map_info = _require_map_info(sub_map_info, "sub_map_info") or SOUTH_CHINA_SEA_MAP_INFO
     if main_basemap is None:
         main_basemap = _china_basemap(main_map_info)
@@ -300,8 +313,8 @@ def cn_area_chart(
             domain=domain,
             map_crs=domain.map_crs,
             position=_CN_AREA_POSITION,
-            aspect=1.25,
-            axis=_main_axis(domain, xstep=4, ystep=2),
+            aspect="equal",
+            axis=_main_axis(domain),
             basemap=main_basemap,
         ),
     }
@@ -310,9 +323,12 @@ def cn_area_chart(
             kind="map",
             domain=SOUTH_CHINA_SEA_DOMAIN,
             map_crs=ccrs.PlateCarree(),
-            position=_INSET_POSITION,
-            aspect=.1 / .14,
-            axis=_inset_axis(),
+            position=_CN_INSET_POSITION,
+            aspect="equal",
+            anchor="SW",
+            axis=AxisSpec(xticks=(), yticks=(), gridlines=GridlineSpec(
+                xlocators=(110, 120), ylocators=(10, 20), linewidth=.2,
+            )),
             basemap=sub_basemap,
         )
     return ChartTemplate(subplots=subplots)
@@ -339,7 +355,8 @@ def cn_area(
             sub_basemap=sub_basemap,
             main_map_info=main_map_info,
             sub_map_info=sub_map_info,
-        )
+        ),
+        figsize=(8.6, 6.1),
     )
 
 

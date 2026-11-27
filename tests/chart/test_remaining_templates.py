@@ -60,8 +60,8 @@ def field() -> xr.DataArray:
 def test_remaining_map_factories_preserve_domain_projection_and_features():
     cn = cn_area_chart()
     assert cn.subplots["main"].domain == CN_AREA_DOMAIN
-    assert cn.subplots["main"].aspect == 1.25
-    assert cn.subplots["main"].axis.xticks == tuple(float(value) for value in range(70, 141, 4))
+    assert cn.subplots["main"].aspect == "equal"
+    assert cn.subplots["main"].axis.xticks == tuple(float(value) for value in range(70, 141, 10))
     assert tuple(item.name for item in cn.subplots["main"].basemap.features) == (
         "coastline",
         "lakes",
@@ -98,6 +98,15 @@ def test_remaining_map_factories_preserve_domain_projection_and_features():
     assert north.subplots["main"].domain.boundary == "circle"
     assert isinstance(north.subplots["main"].map_crs, ccrs.NorthPolarStereo)
     assert len(north.subplots["main"].annotations) == 12
+
+
+def test_cn_area_uses_region_specific_ticks_and_map_note():
+    preset = cn_area_chart(area=(108, 124, 33, 45), with_inset=True)
+    main = preset.subplots["main"]
+    assert main.axis.xticks == (108, 110, 112, 114, 116, 118, 120, 122, 124)
+    assert main.axis.yticks == (34, 36, 38, 40, 42, 44)
+    assert main.basemap.map_info.text == "No:GS (2019) 1786"
+    assert preset.subplots["south_china_sea"].axis.xticks == ()
 
 
 def test_panel_presets_only_configure_caller_owned_chart():
