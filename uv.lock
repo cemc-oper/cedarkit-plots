@@ -196,7 +196,7 @@ requires-dist = [
     { name = "pytest", marker = "extra == 'test'" },
     { name = "pytest-cov", marker = "extra == 'cov'" },
     { name = "pyyaml" },
-    { name = "reki", editable = "../reki" },
+    { name = "reki", specifier = ">=2026.9.0,<2026.9.1" },
     { name = "scipy", marker = "extra == 'test'" },
     { name = "sphinx", marker = "extra == 'docs'", specifier = ">=7.3" },
     { name = "sphinx-book-theme", marker = "extra == 'docs'", specifier = ">=1.1" },
@@ -2118,7 +2118,8 @@ wheels = [
 
 [[package]]
 name = "reki"
-source = { editable = "../reki" }
+version = "2026.9.0"
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "cfgrib" },
     { name = "click" },
@@ -2131,35 +2132,9 @@ dependencies = [
     { name = "tqdm" },
     { name = "xarray" },
 ]
-
-[package.metadata]
-requires-dist = [
-    { name = "cfgrib" },
-    { name = "click" },
-    { name = "dask", marker = "extra == 'lazy'" },
-    { name = "eccodes" },
-    { name = "importlib-metadata", marker = "python_full_version < '3.8'" },
-    { name = "jinja2" },
-    { name = "numpy" },
-    { name = "nuwe-cmadaas", marker = "extra == 'cmadaas'", editable = "../../source/nuwe-cmadaas-devel/repo/nuwe-cmadaas-python" },
-    { name = "pandas" },
-    { name = "pyyaml" },
-    { name = "requests" },
-    { name = "tqdm" },
-    { name = "xarray" },
-]
-provides-extras = ["cmadaas", "lazy"]
-
-[package.metadata.requires-dev]
-cov = [
-    { name = "codecov" },
-    { name = "pytest-cov" },
-]
-test = [
-    { name = "jsonschema" },
-    { name = "nuwe-cmadaas", editable = "../../source/nuwe-cmadaas-devel/repo/nuwe-cmadaas-python" },
-    { name = "pytest" },
-    { name = "scipy" },
+sdist = { url = "https://files.pythonhosted.org/packages/a6/1d/175b041d2db5cd1fd46445ac5676e14daadd03812dce2b2fdfb8a9099e32/reki-2026.9.0.tar.gz", hash = "sha256:5cc6b18461113e5ccb94510bc9a2fa6ecdd1de56f77cb0c66454393fa1ca7ac7", size = 308997, upload-time = "2026-09-01T11:32:08.55Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/4f/4c/87821a635a60fd66141a430e075ea2f4657d71eb8bf97cfdd7b680f78c2f/reki-2026.9.0-py3-none-any.whl", hash = "sha256:9f1d7783a1bca480fe679985db5bebd5e178003a61368067a9d858a49f475108", size = 175115, upload-time = "2026-09-01T11:32:07.005Z" },
 ]
 
 [[package]]
